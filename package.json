@@ -1,0 +1,37 @@
+{
+  "name": "@brycepearce/archive-defender",
+  "version": "0.1.0",
+  "description": "A twin-stick arcade game about reclaiming a runaway media archive.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BrycePearce/archive-defender.git"
+  },
+  "homepage": "https://brycepearce.github.io/archive-defender/",
+  "files": [
+    "package",
+    "src"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/mod.ts",
+      "import": "./package/index.js"
+    },
+    "./launch": {
+      "types": "./src/arcadeLaunch.ts",
+      "import": "./package/launch.js"
+    },
+    "./style.css": "./package/archive-defender.css"
+  },
+  "peerDependencies": {
+    "lucide-react": "^1.30.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && vite build --config vite.lib.config.ts",
+    "test": "deno test --allow-all src"
+  }
+}
