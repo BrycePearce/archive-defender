@@ -46,10 +46,10 @@ standalone game omits the host-navigation button.
 
 ## Releasing
 
-Archive Defender is published as `@brycep/archive-defender`. Releases are deliberate: update
-the version in `package.json`, merge the change, and publish a GitHub release whose tag exactly
-matches that version (for example, package version `0.1.1` uses tag `v0.1.1`). The release workflow
-verifies the game, builds both distributions, checks the tag, and publishes the public npm package.
+Archive Defender is published as `@brycep/archive-defender`. Releases are deliberate: update the
+version in `package.json`, merge the change, and publish a GitHub release whose tag exactly matches
+that version (for example, package version `0.1.1` uses tag `v0.1.1`). The release workflow verifies
+the game, builds both distributions, checks the tag, and publishes the public npm package.
 
 The first release needs an npm automation token saved in the GitHub repository as `NPM_TOKEN`. After
 the package exists on npm, configure npm trusted publishing for GitHub repository
