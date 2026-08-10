@@ -34,15 +34,32 @@ deno task build:lib
 deno task verify
 ```
 
-The standalone site is written to `dist/` by `deno task build`. The reusable React library is
-written to `package/` by `deno task build:lib` and exports:
+The standalone site is written to `dist/` by `deno task build`. The reusable React library and its
+type declarations are written to `package/` by `deno task build:lib` and export:
 
-- `@brycepearce/archive-defender` — the `ArcadeGame` component and public game types.
-- `@brycepearce/archive-defender/launch` — audio priming helpers for host applications.
-- `@brycepearce/archive-defender/style.css` — the game stylesheet.
+- `@brycep/archive-defender` — the `ArcadeGame` component and public game types.
+- `@brycep/archive-defender/launch` — audio priming helpers for host applications.
+- `@brycep/archive-defender/style.css` — the game stylesheet.
 
 The host may provide `onExit` and `exitLabel` to render its own exit behavior. Without `onExit`, the
 standalone game omits the host-navigation button.
+
+## Releasing
+
+Archive Defender is published as `@brycep/archive-defender`. Releases are deliberate: update
+the version in `package.json`, merge the change, and publish a GitHub release whose tag exactly
+matches that version (for example, package version `0.1.1` uses tag `v0.1.1`). The release workflow
+verifies the game, builds both distributions, checks the tag, and publishes the public npm package.
+
+The first release needs an npm automation token saved in the GitHub repository as `NPM_TOKEN`. After
+the package exists on npm, configure npm trusted publishing for GitHub repository
+`BrycePearce/archive-defender` and workflow `publish.yml`; subsequent releases use GitHub's
+short-lived OIDC identity automatically.
+
+Plex Librarian should pin an exact package version. After a release is available, update its
+frontend import to the new version, run the full Plex Librarian verification task, and commit its
+updated `deno.lock`. This keeps game releases independent and prevents an unreviewed game update
+from changing the main application.
 
 ## Persistence
 

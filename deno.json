@@ -3,9 +3,9 @@
   "tasks": {
     "dev": "vite",
     "build": "vite build",
-    "build:lib": "vite build --config vite.lib.config.ts",
+    "build:lib": "vite build --config vite.lib.config.ts && deno run -A npm:typescript@^7.0.2/tsc -p tsconfig.package.json",
     "preview": "vite preview",
-    "check": "deno check src/**/*.ts src/**/*.tsx vite.config.ts vite.lib.config.ts",
+    "check": "deno check src/**/*.ts src/**/*.tsx vite.config.ts vite.lib.config.ts && deno run -A npm:typescript@^7.0.2/tsc -p tsconfig.package.json --noEmit",
     "test": "deno test --allow-all src",
     "verify": "deno fmt --check && deno lint && deno task check && deno task test && deno task build && deno task build:lib"
   },
