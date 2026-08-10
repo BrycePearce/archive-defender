@@ -1,5 +1,5 @@
 {
-  "name": "@brycep/archive-defender",
+  "name": "archive-defender",
   "version": "0.1.0",
   "description": "A twin-stick arcade game about reclaiming a runaway media archive.",
   "type": "module",
