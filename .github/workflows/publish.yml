@@ -31,7 +31,3 @@ jobs:
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - name: Publish public package
         run: npm publish
-        env:
-          # Needed to bootstrap the first release. After trusted publishing is configured
-          # on npm, npm uses the workflow's short-lived OIDC identity instead.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

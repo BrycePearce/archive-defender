@@ -51,10 +51,9 @@ Archive Defender is published as `archive-defender`. Releases are deliberate: up
 version (for example, package version `0.1.1` uses tag `v0.1.1`). The release workflow verifies the
 game, builds both distributions, checks the tag, and publishes the public npm package.
 
-The first release needs an npm automation token saved in the GitHub repository as `NPM_TOKEN`. After
-the package exists on npm, configure npm trusted publishing for GitHub repository
-`BrycePearce/archive-defender` and workflow `publish.yml`; subsequent releases use GitHub's
-short-lived OIDC identity automatically.
+Publishing uses npm trusted publishing for GitHub repository `BrycePearce/archive-defender` and
+workflow `publish.yml`. GitHub's short-lived OIDC identity authorizes each release without a stored
+npm token.
 
 Plex Librarian should pin an exact package version. After a release is available, update its
 frontend import to the new version, run the full Plex Librarian verification task, and commit its
