@@ -1882,7 +1882,7 @@ function backlogTargetCenter(state: GameState) {
 
 function landBacklogHit(state: GameState, boss: Enemy) {
   const quotes = ACTS[state.actIndex].boss.breakoutQuotes;
-  state.backlogBombs = [];
+  recallBacklogBombs(state, boss);
   state.backlogHits += 1;
   state.objectiveProgress = state.backlogHits;
   state.bossPhaseChanges += 1;
@@ -1907,6 +1907,41 @@ function landBacklogHit(state: GameState, boss: Enemy) {
   state.backlogIntermissionStage = 4;
   state.backlogIntermissionFor = hitPause;
   state.backlogRebuildAfterWall = true;
+}
+
+function recallBacklogBombs(state: GameState, boss: Enemy) {
+  for (const bomb of state.backlogBombs) {
+    const dx = boss.x - bomb.x;
+    const dy = boss.y - bomb.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const directionX = dx / distance;
+    const directionY = dy / distance;
+    const steps = Math.min(9, Math.max(3, Math.ceil(distance / 52)));
+    const color = bomb.kind === "red" ? "#ff526e" : bomb.returned ? "#9defff" : "#f8d477";
+    for (let step = 0; step < steps && state.particles.length < MAX_PARTICLES; step++) {
+      const progress = step / steps;
+      const life = 0.28 + progress * 0.2;
+      state.particles.push({
+        id: state.nextParticleId++,
+        x: bomb.x + dx * progress * 0.7,
+        y: bomb.y + dy * progress * 0.7,
+        vx: directionX * (260 + progress * 180),
+        vy: directionY * (260 + progress * 180),
+        life,
+        maxLife: life,
+        color,
+        size: 3.5 - progress * 1.4,
+      });
+    }
+    burstParticles(
+      state,
+      bomb.x,
+      bomb.y,
+      bomb.kind === "red" ? "#ff526e" : bomb.returned ? "#70dff2" : "#f8d477",
+      4,
+    );
+  }
+  state.backlogBombs = [];
 }
 
 function updateBacklogBomb(

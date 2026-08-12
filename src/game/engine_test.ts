@@ -765,6 +765,55 @@ Deno.test("a returned bomb through the wall lands one large boss hit", () => {
   assertEquals(state.bossDialogue?.text, "Let's see how you like being wiped.");
 });
 
+Deno.test("a boss hit recalls every remaining gold ball with a visible trail", () => {
+  const state = backlogBossState();
+  activateBacklogBoss(state);
+  const boss = state.enemies[0];
+  state.backlogTiles = [];
+  state.particles = [];
+  state.backlogBombs = [
+    {
+      x: boss.x,
+      y: boss.y + boss.radius + 3,
+      previousX: boss.x,
+      previousY: boss.y + boss.radius + 3,
+      vx: 0,
+      vy: -390,
+      radius: 11,
+      kind: "returnable",
+      returned: true,
+      lobFor: 0,
+      lobDuration: 0.78,
+      life: 4,
+      maxLife: 15,
+    },
+    {
+      x: 55,
+      y: 210,
+      previousX: 55,
+      previousY: 210,
+      vx: 120,
+      vy: -80,
+      radius: 11,
+      kind: "returnable",
+      returned: true,
+      lobFor: 0,
+      lobDuration: 0,
+      life: 8,
+      maxLife: 15,
+    },
+  ];
+
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+
+  assertEquals(state.backlogBombs.length, 0);
+  const recalledTrail = state.particles.filter((particle) =>
+    particle.color === "#9defff" && particle.x < 180
+  );
+  assertGreater(recalledTrail.length, 3);
+  assert(recalledTrail.every((particle) => particle.vx > 0 && particle.vy < 0));
+});
+
 Deno.test("the Behemoth grants a forgiving near-edge bomb hit", () => {
   const state = backlogBossState();
   activateBacklogBoss(state);
