@@ -9,10 +9,15 @@ import type {
   WeaponKind,
 } from "./types.ts";
 import { UPGRADES } from "./content.ts";
-import { ARCADE_SAVE_KEY } from "../arcadeLaunch.ts";
+import { ARCADE_SAVE_KEY } from "./runtime/storage.ts";
 
 export { ARCADE_SAVE_KEY };
-export const LEGACY_HIGH_SCORE_KEY = "plex-librarian:arcade-high-score";
+
+export interface ArcadePersistenceOptions {
+  storage?: StorageLike | null;
+  key?: string;
+  defaults?: ArcadeSaveV2;
+}
 
 export const DEFAULT_ARCADE_SETTINGS: ArcadeSettings = {
   musicEnabled: true,
@@ -35,19 +40,15 @@ export function createDefaultSave(): ArcadeSaveV2 {
   };
 }
 
-export function readArcadeSave(storage: StorageLike | null = safeStorage()): ArcadeSaveV2 {
-  const fallback = createDefaultSave();
+export function readArcadeSave(options: ArcadePersistenceOptions = {}): ArcadeSaveV2 {
+  const storage = options.storage === undefined ? safeStorage() : options.storage;
+  const key = options.key ?? ARCADE_SAVE_KEY;
+  const fallback = structuredClone(options.defaults ?? createDefaultSave());
   if (!storage) return fallback;
 
   try {
-    const parsed = JSON.parse(storage.getItem(ARCADE_SAVE_KEY) ?? "null");
+    const parsed = JSON.parse(storage.getItem(key) ?? "null");
     if (isSaveV2(parsed)) return normalizeSave(parsed);
-
-    const legacyScore = finiteNumber(storage.getItem(LEGACY_HIGH_SCORE_KEY), 0);
-    if (legacyScore > 0) {
-      fallback.bestScores.normal = Math.floor(legacyScore);
-      writeArcadeSave(fallback, storage);
-    }
   } catch {
     // A blocked or corrupt storage API must never prevent the route from mounting.
   }
@@ -56,11 +57,13 @@ export function readArcadeSave(storage: StorageLike | null = safeStorage()): Arc
 
 export function writeArcadeSave(
   save: ArcadeSaveV2,
-  storage: StorageLike | null = safeStorage(),
+  options: ArcadePersistenceOptions = {},
 ) {
+  const storage = options.storage === undefined ? safeStorage() : options.storage;
+  const key = options.key ?? ARCADE_SAVE_KEY;
   if (!storage) return;
   try {
-    storage.setItem(ARCADE_SAVE_KEY, JSON.stringify(normalizeSave(save)));
+    storage.setItem(key, JSON.stringify(normalizeSave(save)));
   } catch {
     // Progress is optional. The game remains fully playable without persistence.
   }

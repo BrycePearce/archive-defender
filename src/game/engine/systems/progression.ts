@@ -1,5 +1,5 @@
 import { ACTS } from "../../content.ts";
-import type { DifficultyMode, EncounterDefinition, GameState, WeaponKind } from "../../types.ts";
+import type { DifficultyMode, GameState, WeaponKind } from "../../types.ts";
 import { backlogTargetColumnForRound, createBacklogTiles } from "../encounters/backlog.ts";
 import {
   burstParticles,
@@ -233,7 +233,7 @@ export function updateObjective(state: GameState, dt: number) {
   const encounter = getCurrentEncounter(state);
   if (!encounter) return;
   if (encounter.objective === "relay") {
-    updateRelayObjective(state, encounter, dt);
+    updateRelayObjective(state, dt);
   } else if (encounter.objective === "survive") {
     state.objectiveProgress += dt;
   }
@@ -245,7 +245,6 @@ export function updateObjective(state: GameState, dt: number) {
 
 export function updateRelayObjective(
   state: GameState,
-  encounter: EncounterDefinition,
   dt: number,
 ) {
   if (!state.relayCache) {
@@ -282,7 +281,6 @@ export function updateRelayObjective(
   if (state.objectiveProgress >= state.objectiveTarget) {
     if (state.relayMisses === 0) state.score += 400 * (state.actIndex + 1);
   }
-  void encounter;
 }
 
 export function spawnRelayCache(state: GameState) {

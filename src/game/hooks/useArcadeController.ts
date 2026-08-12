@@ -38,6 +38,7 @@ import {
   syncArcadeAudioSignals,
 } from "../runtime/audioSignals.ts";
 import { TEST_LEVELS } from "../runtime/testLevels.ts";
+import type { ArcadeGameOptions } from "../runtime/options.ts";
 import { useArcadeSave } from "./useArcadeSave.ts";
 import { useArcadePause } from "./useArcadePause.ts";
 import { useArcadeAudio } from "./useArcadeAudio.ts";
@@ -50,7 +51,20 @@ const ACTIVE_PHASES = new Set<GamePhase>([
   "endless",
 ]);
 
-export function useArcadeController() {
+export function useArcadeController({
+  startup = "title",
+  audioStart = "interaction",
+  initialMode = "normal",
+  initialWeapon = "blaster",
+  initialSettings,
+  persistence = {},
+  pauseOnBlur = true,
+  pauseWhenHidden = true,
+  onPhaseChange,
+  onRunStart,
+  onGameOver,
+  onVictory,
+}: ArcadeGameOptions = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const musicElementARef = useRef<HTMLAudioElement>(null);
   const musicElementBRef = useRef<HTMLAudioElement>(null);
@@ -60,10 +74,22 @@ export function useArcadeController() {
   const frameRef = useRef<number | null>(null);
   const settingsRef = useRef<ArcadeSettings>(createDefaultSave().settings);
   const previousSignalsRef = useRef(initialArcadeSignals());
-  const { save, saveRef, commitSave, changeSettings } = useArcadeSave();
+  const callbacksRef = useRef({ onPhaseChange, onRunStart, onGameOver, onVictory });
+  callbacksRef.current = { onPhaseChange, onRunStart, onGameOver, onVictory };
+  const notifyPhaseChange = (state: GameState, previousPhase: GamePhase) => {
+    if (state.phase === previousPhase) return;
+    const nextSummary = summarizeGame(state);
+    callbacksRef.current.onPhaseChange?.(nextSummary, previousPhase);
+    if (state.phase === "gameOver") callbacksRef.current.onGameOver?.(nextSummary);
+    if (state.phase === "victory") callbacksRef.current.onVictory?.(nextSummary);
+  };
+  const { save, saveRef, commitSave, changeSettings } = useArcadeSave({
+    persistence,
+    initialSettings,
+  });
   const [summary, setSummary] = useState<GameSummary>(INITIAL_SUMMARY);
-  const [selectedMode, setSelectedMode] = useState<DifficultyMode>("normal");
-  const [selectedWeapon, setSelectedWeapon] = useState<WeaponKind>("blaster");
+  const [selectedMode, setSelectedMode] = useState<DifficultyMode>(initialMode);
+  const [selectedWeapon, setSelectedWeapon] = useState<WeaponKind>(initialWeapon);
   const [showSettings, setShowSettings] = useState(false);
   const [runId, setRunId] = useState(0);
   settingsRef.current = save.settings;
@@ -93,7 +119,7 @@ export function useArcadeController() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    const launchMusic = claimArcadeLaunchMusic();
+    const launchMusic = audioStart === "immediate" ? claimArcadeLaunchMusic() : null;
     const audio = new ArcadeAudio(
       [launchMusic ?? musicElementA, musicElementB],
       {
@@ -136,7 +162,9 @@ export function useArcadeController() {
       context.setTransform(scale, 0, 0, scale, 0, 0);
       if (!stateRef.current) {
         const currentSave = saveRef.current ?? createDefaultSave();
-        if (currentSave.victories.normal === 0 && currentSave.checkpoint) {
+        const shouldResume = startup === "resume" || startup === "resume-or-new";
+        const shouldStart = startup === "new-run" || startup === "resume-or-new";
+        if (shouldResume && currentSave.checkpoint) {
           stateRef.current = createStateFromCheckpoint(
             cssWidth,
             cssHeight,
@@ -144,22 +172,23 @@ export function useArcadeController() {
           );
         } else {
           stateRef.current = createGameState(cssWidth, cssHeight);
-          if (currentSave.victories.normal === 0) {
+          if (shouldStart) {
             dispatchGameAction(stateRef.current, {
               type: "start",
-              mode: "normal",
-              weapon: "blaster",
+              mode: initialMode,
+              weapon: initialWeapon,
             });
             commitSave((draft) => {
               draft.checkpoint = checkpointFromState(stateRef.current!);
             });
+            callbacksRef.current.onRunStart?.(summarizeGame(stateRef.current));
           }
         }
         setSummary(summarizeGame(stateRef.current));
       } else {
         resizeGameState(stateRef.current, cssWidth, cssHeight);
       }
-      if (ACTIVE_PHASES.has(stateRef.current.phase)) {
+      if (audioStart === "immediate" && ACTIVE_PHASES.has(stateRef.current.phase)) {
         if (
           (stateRef.current.phase === "miniboss" &&
             stateRef.current.minibossFightStarts === 0) ||
@@ -188,7 +217,7 @@ export function useArcadeController() {
     const input = new ArcadeInputController(canvas, {
       onInteract: beginAudio,
       onPause: togglePause,
-      onBlur: pauseActiveGame,
+      onBlur: pauseOnBlur ? pauseActiveGame : () => undefined,
     });
     inputRef.current = input;
     const observer = new ResizeObserver(resize);
@@ -219,6 +248,7 @@ export function useArcadeController() {
 
       const previousSignals = previousSignalsRef.current;
       handleTransition(state, previousSignals.phase);
+      notifyPhaseChange(state, previousSignals.phase);
       previousSignalsRef.current = syncArcadeAudioSignals(
         audio,
         state,
@@ -235,7 +265,7 @@ export function useArcadeController() {
     frameRef.current = requestAnimationFrame(frame);
 
     const onVisibilityChange = () => {
-      if (document.hidden) pauseActiveGame();
+      if (pauseWhenHidden && document.hidden) pauseActiveGame();
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
@@ -249,23 +279,32 @@ export function useArcadeController() {
     };
   }, [
     beginAudio,
+    audioStart,
     commitSave,
+    initialMode,
+    initialWeapon,
     pauseActiveGame,
+    pauseOnBlur,
+    pauseWhenHidden,
     handleTransition,
     runId,
+    startup,
     togglePause,
   ]);
 
   const startRun = (mode: DifficultyMode, weapon: WeaponKind) => {
     const state = stateRef.current;
     if (!state) return;
+    const previousPhase = state.phase;
     dispatchGameAction(state, { type: "start", mode, weapon });
     previousSignalsRef.current = captureArcadeSignals(state);
+    notifyPhaseChange(state, previousPhase);
     commitSave((draft) => {
       draft.checkpoint = checkpointFromState(state);
     });
     setPauseState(false);
     setSummary(summarizeGame(state));
+    callbacksRef.current.onRunStart?.(summarizeGame(state));
     beginOpeningAudio();
   };
 
@@ -273,12 +312,14 @@ export function useArcadeController() {
     const checkpoint = save.checkpoint;
     const canvas = canvasRef.current;
     if (!checkpoint || !canvas) return;
+    const previousPhase = stateRef.current?.phase ?? summary.phase;
     stateRef.current = createStateFromCheckpoint(
       Math.max(1, canvas.clientWidth),
       Math.max(1, canvas.clientHeight),
       checkpoint,
     );
     previousSignalsRef.current = captureArcadeSignals(stateRef.current);
+    notifyPhaseChange(stateRef.current, previousPhase);
     setPauseState(false);
     setSummary(summarizeGame(stateRef.current));
     beginOpeningAudio();
@@ -340,6 +381,7 @@ export function useArcadeController() {
     const level = TEST_LEVELS.find((candidate) => candidate.id === id);
     const state = stateRef.current;
     if (!level || !state) return;
+    const previousPhase = state.phase;
     const target: TestLevelTarget = level.kind === "encounter"
       ? {
         actIndex: level.actIndex,
@@ -354,6 +396,7 @@ export function useArcadeController() {
       state.phase === "title" ? selectedWeapon : state.weapon,
     );
     previousSignalsRef.current = captureArcadeSignals(state);
+    notifyPhaseChange(state, previousPhase);
     audioRef.current?.pause();
     setPauseState(false);
     setSummary(summarizeGame(state));

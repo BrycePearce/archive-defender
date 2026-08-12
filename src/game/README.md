@@ -18,6 +18,8 @@ The game is organized around a pure, mutable simulation state with React acting 
 - `hooks/` owns browser and React lifecycle concerns: the animation controller, persistence, pause
   state, and audio coordination. Keep frame-rate simulation data in refs instead of React state.
 - `runtime/` contains pure snapshots and derived configuration shared by hooks and presentation.
+- `runtime/options.ts` defines the public host-integration surface. Prefer a small declarative prop
+  here over exposing engine state or adding host-specific behavior to the controller.
 - `tests/engine/` mirrors the runtime boundaries and shares deterministic fixtures through
   `support.ts`.
 

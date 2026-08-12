@@ -16,25 +16,36 @@
   "files": [
     "package"
   ],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "types": "./package/types/mod.d.ts",
-      "import": "./package/index.js"
+      "default": "./package/index.js"
     },
     "./launch": {
       "types": "./package/types/arcadeLaunch.d.ts",
-      "import": "./package/launch.js"
+      "default": "./package/launch.js"
     },
-    "./style.css": "./package/archive-defender.css"
+    "./style.css": {
+      "types": "./package/style.d.ts",
+      "default": "./package/archive-defender.css"
+    }
   },
   "peerDependencies": {
-    "lucide-react": "^1.30.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react": ">=18.2 <20"
+  },
+  "dependencies": {
+    "lucide-react": "^1.30.0"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build && deno task build:lib",
+    "prepack": "deno task build:lib && deno task verify:package",
     "test": "deno test --allow-all src"
   }
 }

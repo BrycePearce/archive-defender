@@ -35,10 +35,31 @@ function emittedAudioAssets(): Plugin {
   };
 }
 
+function libraryStyles(): Plugin {
+  return {
+    name: "archive-defender-library-styles",
+    transform(code, id) {
+      if (!id.endsWith("/src/mod.ts")) return null;
+      return code.replace(
+        '"use client";',
+        '"use client";\nimport "./game/arcade.css";',
+      );
+    },
+    buildStart() {
+      this.emitFile({
+        type: "asset",
+        fileName: "style.d.ts",
+        source: "export {};\n",
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [emittedAudioAssets(), react()],
+  plugins: [emittedAudioAssets(), libraryStyles(), react()],
   build: {
     outDir: "package",
+    copyPublicDir: false,
     lib: {
       entry: {
         index: "src/mod.ts",
@@ -49,7 +70,7 @@ export default defineConfig({
       cssFileName: "archive-defender",
     },
     rollupOptions: {
-      external: ["react", "react/jsx-runtime", "react-dom", "lucide-react"],
+      external: ["react", "react/jsx-runtime", "lucide-react"],
       output: {
         assetFileNames: (assetInfo) =>
           assetInfo.names.some((name) => name.endsWith(".css"))

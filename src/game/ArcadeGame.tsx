@@ -19,8 +19,7 @@ import { createGameState, getCurrentEncounter } from "./engine.ts";
 import { useArcadeController } from "./hooks/useArcadeController.ts";
 import type { GameSummary } from "./runtime/summary.ts";
 import { TEST_LEVELS } from "./runtime/testLevels.ts";
-import "./arcade.css";
-
+import type { ArcadeGameOptions } from "./runtime/options.ts";
 const LOCAL_TEST_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 function isLocalTestHost() {
@@ -28,12 +27,18 @@ function isLocalTestHost() {
     LOCAL_TEST_HOSTS.has(globalThis.location.hostname);
 }
 
-export interface ArcadeGameProps {
+export interface ArcadeGameProps extends ArcadeGameOptions {
   onExit?: () => void;
   exitLabel?: string;
+  className?: string;
 }
 
-export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGameProps = {}) {
+export function ArcadeGame({
+  onExit,
+  exitLabel = "Exit game",
+  className,
+  ...options
+}: ArcadeGameProps = {}) {
   const {
     canvasRef,
     musicElementARef,
@@ -59,7 +64,7 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
     returnToTitle,
     startEndless,
     selectTestLevel,
-  } = useArcadeController();
+  } = useArcadeController(options);
 
   const bestScore = Math.max(save.bestScores[summary.mode], summary.score);
   const encounter = getCurrentEncounter(
@@ -144,7 +149,7 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
 
   return (
     <section
-      className="arcade-page flex flex-1 flex-col gap-3"
+      className={["arcade-page", className].filter(Boolean).join(" ")}
       aria-labelledby="arcade-title"
     >
       <audio ref={musicElementARef} loop preload="none" />
@@ -152,7 +157,7 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
       <header className="arcade-heading">
         <div>
           <div className="arcade-kicker">
-            <Crosshair className="size-4" /> Classified shelf maintenance
+            <Crosshair /> Classified shelf maintenance
           </div>
           <h1 id="arcade-title">Archive Defender</h1>
         </div>
@@ -179,8 +184,8 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
             </label>
           )}
           {onExit && (
-            <button type="button" className="btn btn-ghost btn-sm gap-2" onClick={onExit}>
-              <ArrowLeft className="size-4" /> {exitLabel}
+            <button type="button" className="arcade-button arcade-button-ghost" onClick={onExit}>
+              <ArrowLeft /> {exitLabel}
             </button>
           )}
         </div>
@@ -356,21 +361,19 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
         <span className="arcade-footer-actions">
           <button
             type="button"
-            className="btn btn-ghost btn-xs gap-1"
+            className="arcade-button arcade-button-ghost arcade-button-compact"
             onClick={() => changeSettings({ musicEnabled: !save.settings.musicEnabled })}
           >
-            {save.settings.musicEnabled
-              ? <Volume2 className="size-3" />
-              : <VolumeX className="size-3" />}
+            {save.settings.musicEnabled ? <Volume2 /> : <VolumeX />}
             Music
           </button>
           <button
             type="button"
-            className="btn btn-ghost btn-xs gap-1"
+            className="arcade-button arcade-button-ghost arcade-button-compact"
             onClick={togglePause}
             disabled={!active}
           >
-            {paused ? <Play className="size-3" /> : <Pause className="size-3" />}
+            {paused ? <Play /> : <Pause />}
             {paused ? "Resume" : "Pause"}
           </button>
         </span>

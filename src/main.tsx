@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { ArcadeGame } from "./game/ArcadeGame.tsx";
+import "./game/arcade.css";
 import "./index.css";
 
 const root = document.getElementById("root");

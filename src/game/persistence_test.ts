@@ -2,7 +2,6 @@ import { assertEquals } from "@std/assert";
 import {
   ARCADE_SAVE_KEY,
   createDefaultSave,
-  LEGACY_HIGH_SCORE_KEY,
   readArcadeSave,
   writeArcadeSave,
 } from "./persistence.ts";
@@ -26,23 +25,25 @@ Deno.test("arcade save round trips local progress", () => {
   save.unlocks.hard = true;
   save.bestScores.normal = 4321;
   save.settings.musicVolume = 19;
-  writeArcadeSave(save, storage);
+  writeArcadeSave(save, { storage });
 
-  const restored = readArcadeSave(storage);
+  const restored = readArcadeSave({ storage });
 
   assertEquals(restored.unlocks.hard, true);
   assertEquals(restored.bestScores.normal, 4321);
   assertEquals(restored.settings.musicVolume, 19);
 });
 
-Deno.test("arcade save migrates the legacy high score", () => {
+Deno.test("arcade persistence supports a host-defined key", () => {
   const storage = new MemoryStorage();
-  storage.setItem(LEGACY_HIGH_SCORE_KEY, "987");
+  const save = createDefaultSave();
+  save.bestScores.normal = 987;
+  writeArcadeSave(save, { storage, key: "host:arcade" });
 
-  const restored = readArcadeSave(storage);
+  const restored = readArcadeSave({ storage, key: "host:arcade" });
 
   assertEquals(restored.bestScores.normal, 987);
-  assertEquals(JSON.parse(storage.getItem(ARCADE_SAVE_KEY) ?? "").version, 2);
+  assertEquals(storage.getItem(ARCADE_SAVE_KEY), null);
 });
 
 Deno.test("arcade save rejects corrupt fields without losing valid progress", () => {
@@ -60,7 +61,7 @@ Deno.test("arcade save rejects corrupt fields without losing valid progress", ()
     }),
   );
 
-  const restored = readArcadeSave(storage);
+  const restored = readArcadeSave({ storage });
 
   assertEquals(restored.settings.musicVolume, 100);
   assertEquals(restored.settings.sfxVolume, 0);
@@ -82,6 +83,6 @@ Deno.test("arcade persistence tolerates blocked storage", () => {
     },
   };
 
-  assertEquals(readArcadeSave(blocked), createDefaultSave());
-  writeArcadeSave(createDefaultSave(), blocked);
+  assertEquals(readArcadeSave({ storage: blocked }), createDefaultSave());
+  writeArcadeSave(createDefaultSave(), { storage: blocked });
 });

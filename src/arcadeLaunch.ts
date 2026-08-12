@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 
-export const ARCADE_SAVE_KEY = "plex-librarian:arcade-save-v2";
+import { ARCADE_SAVE_KEY } from "./game/runtime/storage.ts";
+import type { StorageLike } from "./game/types.ts";
 export const ARCADE_OPENING_TRACK_URL = new URL(
   "./game/assets/oldschool-action-theme.mp3",
   import.meta.url,
@@ -10,9 +11,16 @@ export const ARCADE_MUSIC_GAIN = 2 / 3;
 const DEFAULT_MUSIC_VOLUME = 28;
 let primedLaunchMusic: HTMLAudioElement | null = null;
 
-export function readArcadeLaunchMusicSettings() {
+export function readArcadeLaunchMusicSettings({
+  storage,
+  storageKey = ARCADE_SAVE_KEY,
+}: {
+  storage?: StorageLike | null;
+  storageKey?: string;
+} = {}): { enabled: boolean; volume: number } {
   try {
-    const raw = globalThis.localStorage.getItem(ARCADE_SAVE_KEY);
+    const target = storage === undefined ? globalThis.localStorage : storage;
+    const raw = target?.getItem(storageKey);
     const parsed = raw ? JSON.parse(raw) : null;
     const settings = parsed && typeof parsed === "object" ? parsed.settings : null;
     return {

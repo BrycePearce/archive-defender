@@ -7,7 +7,6 @@ import {
 } from "@std/assert";
 import { createStateFromCheckpoint, dispatchGameAction, stepGame } from "../../engine.ts";
 import { checkpointFromState } from "../../persistence.ts";
-import type { GameState } from "../../types.ts";
 import { activeState, enemy, idleInput, projectile, sequenceRandom } from "./support.ts";
 
 Deno.test("the duplicate boss summons its 2x adds at a gentler cadence", () => {
@@ -636,7 +635,3 @@ Deno.test("pressure director rapidly rebuilds an emptied encounter", () => {
 
   assertGreater(state.enemies.length, 2);
 });
-
-// Keep this type referenced so changes to the public state shape remain visible in tests.
-const _gameStateContract: GameState | null = null;
-void _gameStateContract;

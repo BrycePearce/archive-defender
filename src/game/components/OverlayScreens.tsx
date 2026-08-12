@@ -101,11 +101,11 @@ export function TitleScreen({
 
       {showSettings && <SettingsPanel settings={save.settings} onChange={onChangeSettings} />}
       <div className="arcade-card-actions">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onSettings}>
+        <button type="button" className="arcade-button arcade-button-ghost" onClick={onSettings}>
           {showSettings ? "Hide settings" : "Audio & effects"}
         </button>
-        <button type="button" className="btn btn-primary gap-2" onClick={onStart}>
-          <Play className="size-4" /> Start cleanup
+        <button type="button" className="arcade-button arcade-button-primary" onClick={onStart}>
+          <Play /> Start cleanup
         </button>
       </div>
     </div>
@@ -143,12 +143,12 @@ export function ResultScreen({
       </div>
       <div className="arcade-card-actions">
         {onSecondary && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onSecondary}>
+          <button type="button" className="arcade-button arcade-button-ghost" onClick={onSecondary}>
             Main menu
           </button>
         )}
-        <button type="button" className="btn btn-primary btn-sm gap-2" onClick={onPrimary}>
-          {primary} <ChevronRight className="size-4" />
+        <button type="button" className="arcade-button arcade-button-primary" onClick={onPrimary}>
+          {primary} <ChevronRight />
         </button>
       </div>
     </div>
@@ -178,15 +178,15 @@ export function PauseScreen({
       <SettingsPanel settings={settings} onChange={onChangeSettings} />
       <div className="arcade-card-actions">
         {onTitle && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onTitle}>
+          <button type="button" className="arcade-button arcade-button-ghost" onClick={onTitle}>
             Main menu
           </button>
         )}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onRestart}>
+        <button type="button" className="arcade-button arcade-button-ghost" onClick={onRestart}>
           Restart act
         </button>
-        <button type="button" className="btn btn-primary btn-sm gap-2" onClick={onResume}>
-          <Play className="size-4" /> Resume
+        <button type="button" className="arcade-button arcade-button-primary" onClick={onResume}>
+          <Play /> Resume
         </button>
       </div>
     </div>
