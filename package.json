@@ -1,6 +1,6 @@
 {
   "name": "archive-defender",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A twin-stick arcade game about reclaiming a runaway media archive.",
   "type": "module",
   "license": "MIT",
