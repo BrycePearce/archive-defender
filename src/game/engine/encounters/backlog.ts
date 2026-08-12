@@ -1,14 +1,9 @@
-import { ACTS, DIFFICULTIES } from "../content.ts";
-import type {
-  ArcadeInput,
-  BacklogBomb,
-  BacklogTile,
-  Enemy,
-  EnemyKind,
-  GameState,
-  Projectile,
-  TemporaryPowerupKind,
-} from "../types.ts";
+import { ACTS, DIFFICULTIES } from "../../content.ts";
+import { burstParticles, showBossDialogue, spawnEnemy } from "../combat.ts";
+import { damagePlayer } from "../damage.ts";
+import { choosePowerupKind, spawnPowerupDrop } from "../powerups.ts";
+import { nextRandom } from "../random.ts";
+import type { ArcadeInput, BacklogBomb, BacklogTile, Enemy, GameState } from "../../types.ts";
 import {
   BACKLOG_BOMB_INTERCEPT_PADDING,
   BACKLOG_BOMB_SPEED,
@@ -35,54 +30,8 @@ import {
   MAX_PARTICLES,
   MAX_PROJECTILES,
   PLAYER_RADIUS,
-} from "./config.ts";
-import { clamp, segmentHitsBacklogTile, sweptMovingCirclesIntersect } from "./geometry.ts";
-
-export interface BacklogEffects {
-  burstParticles(
-    state: GameState,
-    x: number,
-    y: number,
-    color: string,
-    count: number,
-  ): void;
-  showBossDialogue(
-    state: GameState,
-    text: string,
-    x: number,
-    y: number,
-    life: number,
-    tone?: "normal" | "danger",
-    fontSize?: number,
-  ): void;
-  damagePlayer(state: GameState, amount: number, reason: string): void;
-  spawnEnemy(
-    state: GameState,
-    kind: EnemyKind,
-    random: () => number,
-    edgePadding?: number,
-  ): Enemy;
-  nextRandom(state: GameState): number;
-  spawnPowerupDrop(
-    state: GameState,
-    kind: TemporaryPowerupKind,
-    x: number,
-    y: number,
-    ignorePhaseCap?: boolean,
-    falling?: boolean,
-  ): boolean | undefined;
-  choosePowerupKind(state: GameState, random: () => number): TemporaryPowerupKind;
-}
-
-let effects: BacklogEffects;
-
-export function configureBacklogEffects(nextEffects: BacklogEffects) {
-  effects = nextEffects;
-}
-
-export function isBacklogFirewallPattern(pattern: Projectile["pattern"]) {
-  return pattern === "backlog-firewall" || pattern === "backlog-firewall-red";
-}
+} from "../config.ts";
+import { clamp, segmentHitsBacklogTile, sweptMovingCirclesIntersect } from "../geometry.ts";
 
 export function updateBacklogEncounter(
   state: GameState,
@@ -114,7 +63,7 @@ export function updateBacklogEncounter(
     if (state.backlogIntroStage < 4) {
       state.backlogIntroStage += 1;
       const text = quotes.intro[state.backlogIntroStage - 1];
-      effects.showBossDialogue(
+      showBossDialogue(
         state,
         text,
         boss.x,
@@ -133,7 +82,7 @@ export function updateBacklogEncounter(
     state.backlogBombCooldown = 1.15;
     state.backlogRedBombCooldown = 2.7;
     state.banner = "BREAK THE BACKLOG";
-    effects.showBossDialogue(state, quotes.start, boss.x, boss.y, 3.1);
+    showBossDialogue(state, quotes.start, boss.x, boss.y, 3.1);
     return;
   }
 
@@ -207,7 +156,7 @@ export function updateBacklogEncounter(
     if (state.backlogIntermissionStage === 3) {
       boss.health = 0;
       state.backlogIntermissionStage = 0;
-      effects.burstParticles(state, boss.x, boss.y, "#f3a65a", 42);
+      burstParticles(state, boss.x, boss.y, "#f3a65a", 42);
       state.screenShake = 1;
     }
     return;
@@ -318,7 +267,7 @@ function landBacklogHit(state: GameState, boss: Enemy) {
   state.objectiveProgress = state.backlogHits;
   state.bossPhaseChanges += 1;
   state.screenShake = 1;
-  effects.burstParticles(state, boss.x, boss.y, "#f8d477", 32);
+  burstParticles(state, boss.x, boss.y, "#f8d477", 32);
 
   if (state.backlogHits >= BACKLOG_BOSS_HITS) {
     state.score += boss.points;
@@ -326,14 +275,14 @@ function landBacklogHit(state: GameState, boss: Enemy) {
     state.backlogIntermissionStage = 3;
     state.backlogIntermissionFor = 2.6;
     state.banner = "BACKLOG CLEARED";
-    if (quotes) effects.showBossDialogue(state, quotes.defeat, boss.x, boss.y, 2.6);
+    if (quotes) showBossDialogue(state, quotes.defeat, boss.x, boss.y, 2.6);
     return;
   }
 
   boss.health = BACKLOG_BOSS_HITS - state.backlogHits;
   const hitQuote = quotes?.hits[state.backlogHits - 1];
   const hitPause = state.backlogHits === 2 ? BACKLOG_SECOND_HIT_PAUSE : 1.7;
-  if (hitQuote) effects.showBossDialogue(state, hitQuote, boss.x, boss.y, hitPause);
+  if (hitQuote) showBossDialogue(state, hitQuote, boss.x, boss.y, hitPause);
   state.backlogTiles = [];
   state.backlogIntermissionStage = 4;
   state.backlogIntermissionFor = hitPause;
@@ -364,7 +313,7 @@ function recallBacklogBombs(state: GameState, boss: Enemy) {
         size: 3.5 - progress * 1.4,
       });
     }
-    effects.burstParticles(
+    burstParticles(
       state,
       bomb.x,
       bomb.y,
@@ -435,7 +384,7 @@ function updateSingleBacklogBomb(
     if (bomb.kind === "returnable" && !bomb.returned) {
       const quotes = ACTS[state.actIndex].boss.breakoutQuotes?.misses ?? [];
       const quote = quotes[state.backlogBombThrowIndex % quotes.length];
-      if (quote) effects.showBossDialogue(state, quote, boss.x, boss.y, 1.8);
+      if (quote) showBossDialogue(state, quote, boss.x, boss.y, 1.8);
     }
     return;
   }
@@ -458,7 +407,7 @@ function updateSingleBacklogBomb(
       bomb.radius + PLAYER_RADIUS
   ) {
     if (state.player.invulnerableFor <= 0) {
-      effects.damagePlayer(state, 1, "Archived by the backlog");
+      damagePlayer(state, 1, "Archived by the backlog");
     }
     explodeBacklogBomb(state, bomb, false);
     return;
@@ -478,7 +427,7 @@ function spawnBacklogGoldBomb(
   const quote = quotes[state.backlogBombThrowIndex % quotes.length];
   state.backlogBombThrowIndex += 1;
   if (quote && backlogCombatDialogueAvailable(state)) {
-    effects.showBossDialogue(state, quote, boss.x, boss.y, 2.2);
+    showBossDialogue(state, quote, boss.x, boss.y, 2.2);
   }
 }
 
@@ -498,7 +447,7 @@ function spawnBacklogRedBombBurst(
   const quotes = ACTS[state.actIndex].boss.breakoutQuotes?.redBomb ?? [];
   const quote = quotes[state.backlogBombThrowIndex % quotes.length];
   if (quote && random() < 0.42 && backlogCombatDialogueAvailable(state)) {
-    effects.showBossDialogue(state, quote, boss.x, boss.y, 2, "danger");
+    showBossDialogue(state, quote, boss.x, boss.y, 2, "danger");
   }
 }
 
@@ -545,7 +494,7 @@ function spawnBacklogBomb(
     life: maxLife,
     maxLife,
   });
-  effects.burstParticles(state, x, y, kind === "red" ? "#ff526e" : "#f8d477", 6);
+  burstParticles(state, x, y, kind === "red" ? "#ff526e" : "#f8d477", 6);
   boss.warningFor = 0.38;
 }
 
@@ -573,7 +522,7 @@ function explodeBacklogBomb(state: GameState, bomb: BacklogBomb, damagePlayerInB
     state.player.invulnerableFor <= 0 &&
     Math.hypot(state.player.x - bomb.x, state.player.y - bomb.y) <= 76 + PLAYER_RADIUS
   ) {
-    effects.damagePlayer(
+    damagePlayer(
       state,
       1,
       bomb.kind === "red"
@@ -581,7 +530,7 @@ function explodeBacklogBomb(state: GameState, bomb: BacklogBomb, damagePlayerInB
         : "Held onto an unstable return for too long",
     );
   }
-  effects.burstParticles(state, bomb.x, bomb.y, bomb.kind === "red" ? "#ff526e" : "#f8d477", 28);
+  burstParticles(state, bomb.x, bomb.y, bomb.kind === "red" ? "#ff526e" : "#f8d477", 28);
   state.screenShake = Math.max(state.screenShake, 0.72);
   removeBacklogBomb(state, bomb);
 }
@@ -631,7 +580,7 @@ function removeBacklogBomb(state: GameState, bomb: BacklogBomb) {
 function damageBacklogTile(state: GameState, tile: BacklogTile, damage: number) {
   tile.health = Math.max(0, tile.health - damage);
   if (tile.health > 0) {
-    effects.burstParticles(state, tile.x, tile.y, "#fff0bd", 4);
+    burstParticles(state, tile.x, tile.y, "#fff0bd", 4);
     return false;
   }
   destroyBacklogTile(state, tile);
@@ -648,7 +597,7 @@ function destroyBacklogTile(state: GameState, tile: BacklogTile) {
     : tile.collector
     ? "#f8d477"
     : "#70dff2";
-  effects.burstParticles(state, tile.x, tile.y, color, 10);
+  burstParticles(state, tile.x, tile.y, color, 10);
   if (tile.special === "cache") {
     state.player.ammo = state.player.magazineSize;
     state.player.reloadFor = 0;
@@ -658,16 +607,16 @@ function destroyBacklogTile(state: GameState, tile: BacklogTile) {
       enemy.kind !== "boss" && enemy.health > 0
     ).length;
     if (livingAdds < 3) {
-      const enemy = effects.spawnEnemy(state, "file", () => effects.nextRandom(state), 0.9);
+      const enemy = spawnEnemy(state, "file", () => nextRandom(state), 0.9);
       enemy.x = tile.x;
       enemy.y = tile.y;
       state.enemies.push(enemy);
       state.banner = "DUPLICATE RESTORED";
     }
   } else if (tile.drop === "powerup") {
-    effects.spawnPowerupDrop(
+    spawnPowerupDrop(
       state,
-      effects.choosePowerupKind(state, () => effects.nextRandom(state)),
+      choosePowerupKind(state, () => nextRandom(state)),
       tile.x,
       tile.y,
       true,
@@ -675,7 +624,7 @@ function destroyBacklogTile(state: GameState, tile: BacklogTile) {
     );
     state.banner = "BONUS FEATURE UNLOCKED";
   } else if (tile.drop === "repair") {
-    effects.spawnPowerupDrop(state, "repair", tile.x, tile.y, true, true);
+    spawnPowerupDrop(state, "repair", tile.x, tile.y, true, true);
     state.banner = "+1 HP AVAILABLE";
   } else if (tile.drop === "bomb") {
     spawnBacklogBonusBall(state, tile.x, tile.y);
@@ -699,7 +648,7 @@ function spawnBacklogBonusBall(state: GameState, x: number, y: number) {
     life: BACKLOG_GOLD_FUSE,
     maxLife: BACKLOG_GOLD_FUSE,
   });
-  effects.burstParticles(state, x, y, "#f8d477", 14);
+  burstParticles(state, x, y, "#f8d477", 14);
 }
 
 function beginBacklogFirewall(state: GameState) {
@@ -716,14 +665,14 @@ function beginBacklogFirewall(state: GameState) {
     const margin = BACKLOG_FIREWALL_GAP_WIDTH / 2 + 34;
     const leftMaximum = Math.max(margin, state.width * 0.34);
     const rightMinimum = Math.min(state.width - margin, state.width * 0.66);
-    const beginLeft = effects.nextRandom(state) < 0.5;
+    const beginLeft = nextRandom(state) < 0.5;
     const maximumTraversal = BASE_PLAYER_SPEED * (BACKLOG_MAZE_WALL_INTERVAL - 0.35);
     const gaps: number[] = [];
     for (let layer = 0; layer < BACKLOG_MAZE_WALL_COUNT; layer++) {
       const useLeft = layer % 2 === 0 ? beginLeft : !beginLeft;
       const minimum = useLeft ? margin : rightMinimum;
       const maximum = useLeft ? leftMaximum : state.width - margin;
-      const rolled = minimum + effects.nextRandom(state) * Math.max(0, maximum - minimum);
+      const rolled = minimum + nextRandom(state) * Math.max(0, maximum - minimum);
       const previous = gaps.at(-1) ?? state.player.x;
       gaps.push(clamp(rolled, previous - maximumTraversal, previous + maximumTraversal));
     }
@@ -731,7 +680,7 @@ function beginBacklogFirewall(state: GameState) {
   }
   const text = quotes?.firewalls[Math.max(0, state.backlogHits - 1)];
   const dialogueFor = state.backlogHits === 2 ? BACKLOG_SECOND_WIPE_WARNING : 2.4;
-  if (text && boss) effects.showBossDialogue(state, text, boss.x, boss.y, dialogueFor, "danger");
+  if (text && boss) showBossDialogue(state, text, boss.x, boss.y, dialogueFor, "danger");
 }
 
 function updateBacklogDeepCleanCycle(state: GameState, dt: number) {
@@ -878,7 +827,7 @@ export function resolveBacklogTileProjectileCollisions(state: GameState) {
       (candidate) => segmentHitsBacklogTile(projectile, candidate),
     );
     if (!tile) continue;
-    effects.burstParticles(
+    burstParticles(
       state,
       projectile.x,
       projectile.y,
@@ -928,7 +877,7 @@ export function resolveBacklogFirewallProjectileCollisions(state: GameState) {
     );
     if (!segment) continue;
     segment.life = -1;
-    effects.burstParticles(state, segment.x, segment.y, "#f8d477", 5);
+    burstParticles(state, segment.x, segment.y, "#f8d477", 5);
     state.enemyHits += 1;
     if (projectile.pierce <= 0) projectile.life = -1;
     else projectile.pierce -= 1;
@@ -964,5 +913,5 @@ export function returnBacklogBomb(
   bomb.returned = true;
   state.banner = "RETURN TO SENDER";
   state.screenShake = Math.max(state.screenShake, 0.35);
-  effects.burstParticles(state, bomb.x, bomb.y, "#70dff2", 12);
+  burstParticles(state, bomb.x, bomb.y, "#70dff2", 12);
 }
