@@ -1,4 +1,88 @@
 import { ACTS, DIFFICULTIES, UPGRADE_BY_ID, UPGRADES } from "./content.ts";
+import {
+  backlogPlayerBoundary,
+  backlogTargetCenter,
+  backlogTargetColumnForRound,
+  configureBacklogEffects,
+  createBacklogTiles,
+  isBacklogFirewallPattern,
+  resolveBacklogBombBossCollisions,
+  resolveBacklogBombProjectileCollisions,
+  resolveBacklogFirewallProjectileCollisions,
+  resolveBacklogTileProjectileCollisions,
+  returnBacklogBomb,
+  updateBacklogEncounter,
+} from "./engine/backlog.ts";
+import {
+  BACKFILL_INTRO_ACTIVE_STAGE,
+  BACKLOG_BOMB_INTERCEPT_PADDING,
+  BACKLOG_BOMB_SPEED,
+  BACKLOG_BOSS_HITS,
+  BACKLOG_FIREWALL_GAP_WIDTH,
+  BACKLOG_FIREWALL_SPEED,
+  BACKLOG_GOLD_BLAST_RADIUS,
+  BACKLOG_GOLD_FUSE,
+  BACKLOG_INTRO_ACTIVE_STAGE,
+  BACKLOG_MAZE_BANNERS,
+  BACKLOG_MAZE_MOVING_WALLS,
+  BACKLOG_MAZE_RED_WALLS,
+  BACKLOG_MAZE_WALL_COUNT,
+  BACKLOG_MAZE_WALL_INTERVAL,
+  BACKLOG_MOVING_FIREWALL_GAP_WIDTH,
+  BACKLOG_RED_WALL_WARNING,
+  BACKLOG_RETURN_SPEED,
+  BACKLOG_SCAN_BANNERS,
+  BACKLOG_SCAN_DIRECTIONS,
+  BACKLOG_SCAN_INTERVAL,
+  BACKLOG_SECOND_HIT_PAUSE,
+  BACKLOG_SECOND_WIPE_WARNING,
+  BASE_DASH_COOLDOWN,
+  BASE_DASH_DURATION,
+  BASE_FIRE_INTERVAL,
+  BASE_PLAYER_SPEED,
+  BASE_PROJECTILE_SPEED,
+  BASE_SECONDARY_COOLDOWN,
+  DASH_SPEED,
+  DEEP_SCAN_BACKLOG_KNOCKBACK,
+  DEEP_SCAN_BASE_WIDTH,
+  DOCUMENT_BURST_RADIUS,
+  DOCUMENT_BURST_WARNING,
+  DROP_COOLDOWN,
+  DROP_PITY_KILLS,
+  DUPLICATE_ENEMY_CHANCE,
+  DUPLICATE_EXPLOSIVE_CHANCE,
+  DUPLICATE_POWERUP_CHANCE,
+  ELITE_DROP_CHANCE,
+  FREEZE_DURATION,
+  FROZEN_DAMAGE_MULTIPLIER,
+  MACHINE_GUN_AMMO,
+  MACHINE_GUN_RELOAD,
+  MAX_ENEMIES,
+  MAX_HAZARDS,
+  MAX_PARTICLES,
+  MAX_PROJECTILES,
+  NORMAL_DROP_CHANCE,
+  PLAYER_RADIUS,
+  POWERUP_WEIGHTS,
+  REFLECT_BOUNCES,
+  REFLECT_LIFE_MULTIPLIER,
+  RELAY_RADIUS,
+  REWARD_REVEAL_DELAY,
+  SINGULARITY_DURATION,
+  SINGULARITY_PLACEMENT_DISTANCE,
+  SINGULARITY_RADIUS,
+  SUPER_SHOT_AMMO,
+  SUPER_SHOT_RELOAD,
+  UPGRADE_TARGET_RADIUS,
+} from "./engine/config.ts";
+import { clamp, segmentHitsCircle, segmentsWithinDistance } from "./engine/geometry.ts";
+import { adjustedBudget, chooseWeightedKind, enemyCost, enemyStats } from "./engine/enemies.ts";
+import { createSeed, nextRandom } from "./engine/random.ts";
+import { getActProgress, getCurrentEncounter, getObjectiveLabel } from "./engine/selectors.ts";
+import { resizeGameState } from "./engine/state.ts";
+export { getActProgress, getCurrentEncounter, getObjectiveLabel };
+export { resizeGameState };
+export const resizeArcadeState = resizeGameState;
 import type {
   ArcadeCheckpoint,
   ArcadeInput,
@@ -19,93 +103,15 @@ import type {
   WeaponKind,
 } from "./types.ts";
 
-const PLAYER_RADIUS = 13;
-const BASE_PLAYER_SPEED = 255;
-const BASE_PROJECTILE_SPEED = 610;
-const BASE_FIRE_INTERVAL = 0.14;
-const BASE_DASH_COOLDOWN = 2.35;
-const BASE_DASH_DURATION = 0.2;
-const DASH_SPEED = 760;
-const MAX_ENEMIES = 140;
-const MAX_PROJECTILES = 260;
-const MAX_HAZARDS = 80;
-const MAX_PARTICLES = 280;
-const RELAY_RADIUS = 18;
-const UPGRADE_TARGET_RADIUS = 28;
-const BASE_SECONDARY_COOLDOWN = 7.5;
-const DEEP_SCAN_BASE_WIDTH = 10;
-const DEEP_SCAN_BACKLOG_KNOCKBACK = 48;
-const REFLECT_LIFE_MULTIPLIER = 3.5;
-const REFLECT_BOUNCES = 8;
-const REWARD_REVEAL_DELAY = 1;
-const DOCUMENT_BURST_RADIUS = 46;
-const DOCUMENT_BURST_WARNING = 0.45;
-const NORMAL_DROP_CHANCE = 0.015;
-const ELITE_DROP_CHANCE = 0.35;
-const DROP_PITY_KILLS = 12;
-const DROP_COOLDOWN = 6;
-const MACHINE_GUN_AMMO = 48;
-const SUPER_SHOT_AMMO = 8;
-const BACKFILL_INTRO_ACTIVE_STAGE = 8;
-const BACKLOG_INTRO_ACTIVE_STAGE = 5;
-const BACKLOG_BOSS_HITS = 4;
-const BACKLOG_FIREWALL_SPEED = 185;
-const BACKLOG_BOMB_SPEED = 245;
-const BACKLOG_RETURN_SPEED = 390;
-const BACKLOG_BOMB_INTERCEPT_PADDING = 5;
-const BACKLOG_GOLD_FUSE = 15;
-const BACKLOG_GOLD_BLAST_RADIUS = 86;
-const BACKLOG_FIREWALL_GAP_WIDTH = 64;
-const BACKLOG_MOVING_FIREWALL_GAP_WIDTH = 82;
-const BACKLOG_MAZE_WALL_COUNT = 10;
-const BACKLOG_MAZE_WALL_INTERVAL = 2.1;
-const BACKLOG_MAZE_MOVING_WALLS = 4;
-const BACKLOG_MAZE_RED_WALLS = new Set([3, 7]);
-const BACKLOG_RED_WALL_WARNING = 0.9;
-const BACKLOG_SCAN_INTERVAL = 2.75;
-const BACKLOG_SECOND_HIT_PAUSE = 3;
-const BACKLOG_SECOND_WIPE_WARNING = 3;
-const BACKLOG_SCAN_DIRECTIONS = [1, 3, 0, 2, 1, 0] as const;
-const BACKLOG_SCAN_BANNERS = [
-  "DEEP CLEAN: 17%",
-  "DEEP CLEAN: 34%",
-  "DEEP CLEAN: 51%",
-  "DEEP CLEAN: 68%",
-  "DEEP CLEAN: 99%",
-  "DEEP CLEAN: STILL 99%",
-];
-const BACKLOG_MAZE_BANNERS = [
-  "UP NEXT: MORE BACKLOG",
-  "SKIP INTRO UNAVAILABLE",
-  "ARE YOU STILL DODGING?",
-  "AUTOPLAYING SEASON TWO",
-  "BUFFERING YOUR ESCAPE",
-  "CONTINUE WATCHING: YES",
-  "CREDITS COUNT AS CONTENT",
-  "RECOMMENDED BECAUSE YOU PANICKED",
-  "UP NEXT: THE SAME THING",
-  "SEASON FINALE (PART 1 OF 6)",
-];
-const MACHINE_GUN_RELOAD = 1.35;
-const SUPER_SHOT_RELOAD = 1.7;
-const FREEZE_DURATION = 4;
-const FROZEN_DAMAGE_MULTIPLIER = 1.75;
-const SINGULARITY_DURATION = 3;
-const SINGULARITY_RADIUS = 24;
-const SINGULARITY_PLACEMENT_DISTANCE = 170;
-const DUPLICATE_EXPLOSIVE_CHANCE = 0.62;
-const DUPLICATE_ENEMY_CHANCE = 0.22;
-const DUPLICATE_POWERUP_CHANCE = 0.05;
-const POWERUP_WEIGHTS: Record<TemporaryPowerupKind, number> = {
-  "machine-gun": 2,
-  "super-shot": 1.6,
-  shield: 1.4,
-  reflect: 1,
-  prism: 1,
-  freeze: 0.35,
-  singularity: 0.35,
-  repair: 1.2,
-};
+configureBacklogEffects({
+  burstParticles,
+  showBossDialogue,
+  damagePlayer,
+  spawnEnemy,
+  nextRandom,
+  spawnPowerupDrop,
+  choosePowerupKind,
+});
 
 interface CreateGameOptions {
   mode?: DifficultyMode;
@@ -258,53 +264,6 @@ export function createStateFromCheckpoint(
 ) {
   return createGameState(width, height, { checkpoint });
 }
-
-export function resizeGameState(
-  state: GameState,
-  width: number,
-  height: number,
-) {
-  const previousWidth = Math.max(1, state.width);
-  const previousHeight = Math.max(1, state.height);
-  const scaleX = width / previousWidth;
-  const scaleY = height / previousHeight;
-  state.width = width;
-  state.height = height;
-  state.player.x = clamp(
-    state.player.x * scaleX,
-    PLAYER_RADIUS,
-    width - PLAYER_RADIUS,
-  );
-  state.player.y = clamp(
-    state.player.y * scaleY,
-    PLAYER_RADIUS,
-    height - PLAYER_RADIUS,
-  );
-  for (const enemy of state.enemies) {
-    enemy.x = clamp(enemy.x * scaleX, -enemy.radius, width + enemy.radius);
-    enemy.y = clamp(enemy.y * scaleY, -enemy.radius, height + enemy.radius);
-  }
-  for (const hazard of state.hazards) {
-    hazard.x = clamp(hazard.x * scaleX, 0, width);
-    hazard.y = clamp(hazard.y * scaleY, 0, height);
-  }
-  for (const tile of state.backlogTiles) {
-    tile.x *= scaleX;
-    tile.anchorX *= scaleX;
-    tile.y *= scaleY;
-    tile.width *= scaleX;
-    tile.height *= scaleY;
-  }
-  for (const bomb of state.backlogBombs) {
-    bomb.x = clamp(bomb.x * scaleX, 0, width);
-    bomb.y = clamp(bomb.y * scaleY, 0, height);
-    bomb.previousX *= scaleX;
-    bomb.previousY *= scaleY;
-  }
-  state.backlogFirewallGaps = state.backlogFirewallGaps.map((gap) => gap * scaleX);
-}
-
-export const resizeArcadeState = resizeGameState;
 
 /** Starts a clean run at an authored level. Intended for local development tools. */
 export function jumpToTestLevel(
@@ -501,59 +460,6 @@ export function stepGame(
 }
 
 export const stepArcade = stepGame;
-
-export function getCurrentEncounter(
-  state: GameState,
-): EncounterDefinition | null {
-  if (state.phase === "endless") return null;
-  return ACTS[state.actIndex]?.encounters[state.encounterIndex] ?? null;
-}
-
-export function getObjectiveLabel(state: GameState) {
-  if (
-    state.phase !== "encounter" &&
-    state.phase !== "miniboss" &&
-    state.phase !== "boss" &&
-    state.phase !== "endless"
-  ) {
-    return "";
-  }
-  if (state.phase === "boss" || state.phase === "miniboss") {
-    if (state.phase === "miniboss" && state.minibossDefeatFor > 0) {
-      return "Process terminated";
-    }
-    const boss = state.enemies.find((enemy) => enemy.kind === "boss");
-    if (state.phase === "boss" && boss?.bossKind === "backlog") {
-      return `Backlog ${state.backlogHits} / ${BACKLOG_BOSS_HITS} episodes purged`;
-    }
-    const label = state.phase === "miniboss" ? "Miniboss" : "Boss";
-    return boss ? `${label} integrity ${Math.max(0, Math.ceil(boss.health))}` : `${label} incoming`;
-  }
-  if (state.phase === "endless") return `Round ${state.endlessRound}`;
-  const encounter = getCurrentEncounter(state);
-  if (!encounter) return "";
-  if (encounter.objective === "purge") {
-    return `${Math.floor(state.objectiveProgress)} / ${state.objectiveTarget} GB`;
-  }
-  if (encounter.objective === "relay") {
-    const seconds = state.relayCache ? Math.max(0, state.relayCache.timeRemaining).toFixed(1) : "—";
-    return `${Math.floor(state.objectiveProgress)} / ${state.objectiveTarget} caches · ${seconds}s`;
-  }
-  return `${Math.max(0, Math.ceil(state.objectiveTarget - state.objectiveProgress))}s remaining`;
-}
-
-export function getActProgress(state: GameState) {
-  if (state.phase === "boss") return 1;
-  if (state.phase === "miniboss") return 0.5;
-  if (state.phase === "actComplete" || state.phase === "victory") return 1;
-  return clamp(
-    (state.encounterIndex +
-      state.objectiveProgress / Math.max(1, state.objectiveTarget)) /
-      4,
-    0,
-    1,
-  );
-}
 
 function resetForRun(
   state: GameState,
@@ -1653,785 +1559,6 @@ function spawnBackfillWall(state: GameState, direction: number) {
   }
 }
 
-function updateBacklogEncounter(
-  state: GameState,
-  dt: number,
-  input: ArcadeInput,
-  random: () => number,
-) {
-  if (state.phase !== "boss" || ACTS[state.actIndex].boss.kind !== "backlog") return;
-  const boss = state.enemies.find(
-    (enemy) => enemy.kind === "boss" && enemy.bossKind === "backlog" && enemy.health > 0,
-  );
-  const quotes = ACTS[state.actIndex].boss.breakoutQuotes;
-  if (!boss || !quotes) return;
-
-  for (const tile of state.backlogTiles) {
-    tile.entranceFor = Math.max(0, tile.entranceFor - dt);
-    const shift = state.backlogHits > 0 && state.backlogIntermissionStage === 0
-      ? Math.sin(state.elapsed * (0.9 + state.backlogHits * 0.18)) *
-        (14 + state.backlogHits * 5)
-      : 0;
-    tile.x = tile.anchorX + shift;
-  }
-
-  if (state.backlogIntroStage < BACKLOG_INTRO_ACTIVE_STAGE) {
-    const advancePressed = input.firing || input.secondary;
-    const advance = advancePressed && !state.backlogDialogueAdvanceHeld;
-    state.backlogDialogueAdvanceHeld = advancePressed;
-    if (!advance) return;
-    if (state.backlogIntroStage < 4) {
-      state.backlogIntroStage += 1;
-      const text = quotes.intro[state.backlogIntroStage - 1];
-      showBossDialogue(
-        state,
-        text,
-        boss.x,
-        boss.y,
-        3600,
-        state.backlogIntroStage === 4 ? "danger" : "normal",
-      );
-      if (state.backlogIntroStage === 4) {
-        state.bossImpactCues += 1;
-        state.screenShake = Math.max(state.screenShake, 0.55);
-      }
-      return;
-    }
-    state.backlogIntroStage = BACKLOG_INTRO_ACTIVE_STAGE;
-    state.backlogFightStarts += 1;
-    state.backlogBombCooldown = 1.15;
-    state.backlogRedBombCooldown = 2.7;
-    state.banner = "BREAK THE BACKLOG";
-    showBossDialogue(state, quotes.start, boss.x, boss.y, 3.1);
-    return;
-  }
-
-  if (state.backlogIntermissionStage > 0) {
-    state.backlogIntermissionFor = Math.max(0, state.backlogIntermissionFor - dt);
-    state.backlogFirewallWarningFor = Math.max(0, state.backlogFirewallWarningFor - dt);
-    if (state.backlogIntermissionStage === 2 && state.backlogHits === 2) {
-      updateBacklogGapMaze(state, dt);
-    }
-    if (state.backlogIntermissionStage === 2 && state.backlogHits === 3) {
-      updateBacklogDeepCleanCycle(state, dt);
-    }
-    if (state.backlogIntermissionFor > 0) return;
-    if (state.backlogIntermissionStage === 4) {
-      beginBacklogFirewall(state);
-      return;
-    }
-    if (state.backlogIntermissionStage === 1) {
-      const horizontalSpeed = BACKLOG_FIREWALL_SPEED * (1 + state.backlogHits * 0.06);
-      state.backlogTiles = [];
-      if (state.backlogHits === 2) {
-        const gapSpeed = horizontalSpeed * 1.08;
-        state.bossDialogue = null;
-        state.backlogMazeWallIndex = 0;
-        state.backlogMazeNextWallFor = BACKLOG_MAZE_WALL_INTERVAL;
-        spawnBacklogMazeWall(state, state.backlogFirewallGaps[0], gapSpeed);
-        state.backlogMazeWallIndex = 1;
-        state.backlogIntermissionStage = 2;
-        state.backlogIntermissionFor = (state.backlogFirewallGaps.length - 1) *
-            BACKLOG_MAZE_WALL_INTERVAL +
-          (state.height + 100) / gapSpeed;
-        return;
-      }
-      if (state.backlogHits === 3) {
-        state.bossDialogue = null;
-        state.backlogScanStep = 0;
-        state.backlogScanNextFor = BACKLOG_SCAN_INTERVAL;
-        spawnBacklogScan(state, state.backlogScanStep);
-        state.backlogScanStep = 1;
-        state.backlogFirewallDirection = BACKLOG_SCAN_DIRECTIONS[state.backlogScanStep];
-        state.backlogIntermissionStage = 2;
-        state.backlogIntermissionFor = (BACKLOG_SCAN_DIRECTIONS.length - 1) *
-            BACKLOG_SCAN_INTERVAL +
-          (Math.max(state.width, state.height) + 150) / BACKLOG_FIREWALL_SPEED;
-        return;
-      }
-      const layers = state.backlogHits >= 3 ? 2 : 1;
-      const verticalSpeed = BACKLOG_FIREWALL_SPEED * (1.28 + state.backlogHits * 0.05);
-      spawnBacklogFirewall(state, 0, layers, horizontalSpeed);
-      spawnBacklogFirewall(state, 1, layers, verticalSpeed);
-      state.backlogIntermissionStage = 2;
-      state.backlogIntermissionFor = Math.max(
-        (state.height + 150) / horizontalSpeed,
-        (state.width + 150) / verticalSpeed,
-      );
-      return;
-    }
-    if (state.backlogIntermissionStage === 2) {
-      if (state.backlogRebuildAfterWall) {
-        state.backlogTargetColumn = backlogTargetColumnForRound(state.backlogHits);
-        state.backlogTiles = createBacklogTiles(state, state.backlogHits, false);
-        state.player.y = Math.max(state.player.y, backlogPlayerBoundary(state));
-      }
-      state.backlogIntermissionStage = 0;
-      state.backlogRebuildAfterWall = false;
-      state.backlogBombCooldown = 1.15;
-      state.backlogRedBombCooldown = 1.5;
-      state.banner = "BREAK THE BACKLOG";
-      return;
-    }
-    if (state.backlogIntermissionStage === 3) {
-      boss.health = 0;
-      state.backlogIntermissionStage = 0;
-      burstParticles(state, boss.x, boss.y, "#f3a65a", 42);
-      state.screenShake = 1;
-    }
-    return;
-  }
-
-  updateBacklogBomb(state, boss, dt, random);
-}
-
-function createBacklogTiles(
-  state: GameState,
-  round: number,
-  entrance: boolean,
-): BacklogTile[] {
-  const columns = 9;
-  const rows = 4;
-  const gap = 4;
-  const margin = 18;
-  const width = (state.width - margin * 2 - gap * (columns - 1)) / columns;
-  const height = 21;
-  const top = Math.max(102, state.height * 0.31);
-  const targetColumn = backlogTargetColumnForRound(round);
-  const tiles: BacklogTile[] = [];
-  for (let row = 0; row < rows; row++) {
-    for (let column = 0; column < columns; column++) {
-      if ((row === 0 || row === rows - 1) && (column === 0 || column === columns - 1)) {
-        continue;
-      }
-      const special = row === 1 && column === (round + 1) % columns
-        ? "cache"
-        : row === 0 && column === (round + 5) % columns
-        ? "duplicate"
-        : undefined;
-      const collector = !special && (column + row * 3 + round) % 7 === 0;
-      const signature = (row * columns + column + round * 4) % 24;
-      const drop = special
-        ? undefined
-        : signature === 2
-        ? "enemy"
-        : signature === 7
-        ? "powerup"
-        : signature === 14
-        ? "repair"
-        : signature === 21
-        ? "bomb"
-        : undefined;
-      const maxHealth = column === targetColumn
-        ? 3
-        : collector || special || (row + column + round) % 5 === 0
-        ? 2
-        : 1;
-      tiles.push({
-        id: round * 100 + row * columns + column + 1,
-        x: margin + width / 2 + column * (width + gap),
-        anchorX: margin + width / 2 + column * (width + gap),
-        y: top + row * (height + gap) + Math.abs(column - 4) * 1.8,
-        width,
-        height,
-        health: maxHealth,
-        maxHealth,
-        row,
-        column,
-        collector,
-        special,
-        drop,
-        entranceFor: entrance ? 4.1 + row * 0.24 + column * 0.07 : 0.4 + row * 0.08,
-      });
-    }
-  }
-  return tiles;
-}
-
-function backlogPlayerBoundary(state: GameState) {
-  const authoredWallBottom = Math.max(102, state.height * 0.31) + 3 * (21 + 4) + 3 * 1.8 +
-    21 / 2;
-  const livingWallBottom = state.backlogTiles.reduce(
-    (bottom, tile) => Math.max(bottom, tile.y + tile.height / 2),
-    authoredWallBottom,
-  );
-  return Math.min(state.height - PLAYER_RADIUS, livingWallBottom + PLAYER_RADIUS + 7);
-}
-
-function backlogTargetColumnForRound(round: number) {
-  return [4, 6, 2, 5][Math.min(round, 3)];
-}
-
-function backlogColumnCenter(state: GameState, column: number) {
-  const columns = 9;
-  const gap = 4;
-  const margin = 18;
-  const width = (state.width - margin * 2 - gap * (columns - 1)) / columns;
-  return margin + width / 2 + column * (width + gap);
-}
-
-function backlogTargetCenter(state: GameState) {
-  const targetTiles = state.backlogTiles.filter((tile) =>
-    tile.column === state.backlogTargetColumn
-  );
-  if (targetTiles.length === 0) {
-    return backlogColumnCenter(state, state.backlogTargetColumn);
-  }
-  return targetTiles.reduce((sum, tile) => sum + tile.x, 0) / targetTiles.length;
-}
-
-function landBacklogHit(state: GameState, boss: Enemy) {
-  const quotes = ACTS[state.actIndex].boss.breakoutQuotes;
-  recallBacklogBombs(state, boss);
-  state.backlogHits += 1;
-  state.objectiveProgress = state.backlogHits;
-  state.bossPhaseChanges += 1;
-  state.screenShake = 1;
-  burstParticles(state, boss.x, boss.y, "#f8d477", 32);
-
-  if (state.backlogHits >= BACKLOG_BOSS_HITS) {
-    state.score += boss.points;
-    state.kills += 1;
-    state.backlogIntermissionStage = 3;
-    state.backlogIntermissionFor = 2.6;
-    state.banner = "BACKLOG CLEARED";
-    if (quotes) showBossDialogue(state, quotes.defeat, boss.x, boss.y, 2.6);
-    return;
-  }
-
-  boss.health = BACKLOG_BOSS_HITS - state.backlogHits;
-  const hitQuote = quotes?.hits[state.backlogHits - 1];
-  const hitPause = state.backlogHits === 2 ? BACKLOG_SECOND_HIT_PAUSE : 1.7;
-  if (hitQuote) showBossDialogue(state, hitQuote, boss.x, boss.y, hitPause);
-  state.backlogTiles = [];
-  state.backlogIntermissionStage = 4;
-  state.backlogIntermissionFor = hitPause;
-  state.backlogRebuildAfterWall = true;
-}
-
-function recallBacklogBombs(state: GameState, boss: Enemy) {
-  for (const bomb of state.backlogBombs) {
-    const dx = boss.x - bomb.x;
-    const dy = boss.y - bomb.y;
-    const distance = Math.hypot(dx, dy) || 1;
-    const directionX = dx / distance;
-    const directionY = dy / distance;
-    const steps = Math.min(9, Math.max(3, Math.ceil(distance / 52)));
-    const color = bomb.kind === "red" ? "#ff526e" : bomb.returned ? "#9defff" : "#f8d477";
-    for (let step = 0; step < steps && state.particles.length < MAX_PARTICLES; step++) {
-      const progress = step / steps;
-      const life = 0.28 + progress * 0.2;
-      state.particles.push({
-        id: state.nextParticleId++,
-        x: bomb.x + dx * progress * 0.7,
-        y: bomb.y + dy * progress * 0.7,
-        vx: directionX * (260 + progress * 180),
-        vy: directionY * (260 + progress * 180),
-        life,
-        maxLife: life,
-        color,
-        size: 3.5 - progress * 1.4,
-      });
-    }
-    burstParticles(
-      state,
-      bomb.x,
-      bomb.y,
-      bomb.kind === "red" ? "#ff526e" : bomb.returned ? "#70dff2" : "#f8d477",
-      4,
-    );
-  }
-  state.backlogBombs = [];
-}
-
-function updateBacklogBomb(
-  state: GameState,
-  boss: Enemy,
-  dt: number,
-  random: () => number,
-) {
-  if (!state.backlogBombs.some((bomb) => bomb.kind === "returnable")) {
-    state.backlogBombCooldown = Math.max(0, state.backlogBombCooldown - dt);
-    if (state.backlogBombCooldown <= 0) spawnBacklogGoldBomb(state, boss, random);
-  }
-  state.backlogRedBombCooldown = Math.max(0, state.backlogRedBombCooldown - dt);
-  if (state.backlogRedBombCooldown <= 0) {
-    spawnBacklogRedBombBurst(state, boss, random);
-  }
-
-  for (const bomb of [...state.backlogBombs]) {
-    updateSingleBacklogBomb(state, boss, bomb, dt);
-  }
-}
-
-function updateSingleBacklogBomb(
-  state: GameState,
-  boss: Enemy,
-  bomb: BacklogBomb,
-  dt: number,
-) {
-  bomb.previousX = bomb.x;
-  bomb.previousY = bomb.y;
-  bomb.life -= dt;
-  if (bomb.lobFor > 0) {
-    bomb.lobFor = Math.max(0, bomb.lobFor - dt);
-    bomb.x += bomb.vx * dt;
-    bomb.y += bomb.vy * dt;
-    if (bomb.lobFor === 0) {
-      if (bomb.kind === "red") {
-        bomb.vx = 0;
-        bomb.vy = 0;
-      } else {
-        const dx = state.player.x - bomb.x;
-        const dy = state.player.y - bomb.y;
-        const distance = Math.hypot(dx, dy) || 1;
-        bomb.vx = (dx / distance) * BACKLOG_BOMB_SPEED;
-        bomb.vy = (dy / distance) * BACKLOG_BOMB_SPEED;
-      }
-    }
-    return;
-  }
-  const fuseSlow = bomb.kind === "red" && bomb.life < 0.8 ? 0.18 : 1;
-  bomb.x += bomb.vx * dt * fuseSlow;
-  bomb.y += bomb.vy * dt * fuseSlow;
-
-  if (bomb.x < bomb.radius || bomb.x > state.width - bomb.radius) {
-    bomb.x = clamp(bomb.x, bomb.radius, state.width - bomb.radius);
-    bomb.vx *= -1;
-  }
-  if (bomb.y > state.height + bomb.radius) {
-    removeBacklogBomb(state, bomb);
-    if (bomb.kind === "returnable" && !bomb.returned) {
-      const quotes = ACTS[state.actIndex].boss.breakoutQuotes?.misses ?? [];
-      const quote = quotes[state.backlogBombThrowIndex % quotes.length];
-      if (quote) showBossDialogue(state, quote, boss.x, boss.y, 1.8);
-    }
-    return;
-  }
-  if (bomb.y < bomb.radius) {
-    bomb.y = bomb.radius;
-    bomb.vy = Math.abs(bomb.vy);
-    bomb.returned = false;
-  }
-
-  if (bomb.kind === "returnable") {
-    const struckTile = state.backlogTiles.find((tile) => segmentHitsBacklogTile(bomb, tile));
-    if (struckTile) {
-      bounceBacklogBombOffTile(state, bomb, struckTile);
-      return;
-    }
-  }
-
-  if (
-    Math.hypot(bomb.x - state.player.x, bomb.y - state.player.y) <=
-      bomb.radius + PLAYER_RADIUS
-  ) {
-    if (state.player.invulnerableFor <= 0) damagePlayer(state, 1, "Archived by the backlog");
-    explodeBacklogBomb(state, bomb, false);
-    return;
-  }
-
-  if (bomb.life <= 0) explodeBacklogBomb(state, bomb, true);
-}
-
-function spawnBacklogGoldBomb(
-  state: GameState,
-  boss: Enemy,
-  random: () => number,
-) {
-  spawnBacklogBomb(state, boss, "returnable", random, 0);
-  state.backlogBombCooldown = 1.1;
-  const quotes = ACTS[state.actIndex].boss.breakoutQuotes?.volleys ?? [];
-  const quote = quotes[state.backlogBombThrowIndex % quotes.length];
-  state.backlogBombThrowIndex += 1;
-  if (quote && backlogCombatDialogueAvailable(state)) {
-    showBossDialogue(state, quote, boss.x, boss.y, 2.2);
-  }
-}
-
-function spawnBacklogRedBombBurst(
-  state: GameState,
-  boss: Enemy,
-  random: () => number,
-) {
-  const maximum = Math.min(4, 1 + state.backlogHits);
-  const count = 1 + Math.floor(random() * maximum);
-  for (let index = 0; index < count; index++) {
-    spawnBacklogBomb(state, boss, "red", random, index - (count - 1) / 2);
-  }
-  state.backlogBombThrowIndex += 1;
-  const pressure = Math.min(3, state.backlogHits);
-  state.backlogRedBombCooldown = Math.max(1.2, 3.5 - pressure * 0.45) + random() * 1.8;
-  const quotes = ACTS[state.actIndex].boss.breakoutQuotes?.redBomb ?? [];
-  const quote = quotes[state.backlogBombThrowIndex % quotes.length];
-  if (quote && random() < 0.42 && backlogCombatDialogueAvailable(state)) {
-    showBossDialogue(state, quote, boss.x, boss.y, 2, "danger");
-  }
-}
-
-function backlogCombatDialogueAvailable(state: GameState) {
-  return !state.bossDialogue || state.bossDialogue.life <= 0.35;
-}
-
-function spawnBacklogBomb(
-  state: GameState,
-  boss: Enemy,
-  kind: BacklogBomb["kind"],
-  random: () => number,
-  spreadIndex: number,
-) {
-  const wallBottom = state.backlogTiles.reduce(
-    (bottom, tile) => Math.max(bottom, tile.y + tile.height / 2),
-    boss.y + boss.radius,
-  );
-  const playerAreaTop = Math.min(state.height - 70, backlogPlayerBoundary(state) + 8);
-  const landingY = kind === "red"
-    ? playerAreaTop + random() * Math.max(0, state.height - 42 - playerAreaTop)
-    : Math.min(state.height - 70, wallBottom + 42);
-  const x = clamp(boss.x + spreadIndex * 9 + (random() - 0.5) * 20, 22, state.width - 22);
-  const y = boss.y + boss.radius * 0.2;
-  const landingX = clamp(
-    38 + random() * Math.max(0, state.width - 76) + spreadIndex * 18,
-    38,
-    state.width - 38,
-  );
-  const lobDuration = 0.58 + random() * 0.52;
-  const maxLife = kind === "red" ? 3.2 : BACKLOG_GOLD_FUSE;
-  state.backlogBombs.push({
-    x,
-    y,
-    previousX: x,
-    previousY: y,
-    vx: (landingX - x) / lobDuration,
-    vy: (landingY - y) / lobDuration,
-    radius: kind === "red" ? 13 : 11,
-    kind,
-    returned: false,
-    lobFor: lobDuration,
-    lobDuration,
-    life: maxLife,
-    maxLife,
-  });
-  burstParticles(state, x, y, kind === "red" ? "#ff526e" : "#f8d477", 6);
-  boss.warningFor = 0.38;
-}
-
-function explodeBacklogBomb(state: GameState, bomb: BacklogBomb, damagePlayerInBlast: boolean) {
-  if (damagePlayerInBlast && bomb.kind === "returnable") {
-    const blastTiles = state.backlogTiles.filter((tile) => {
-      const dx = Math.max(Math.abs(tile.x - bomb.x) - tile.width / 2, 0);
-      const dy = Math.max(Math.abs(tile.y - bomb.y) - tile.height / 2, 0);
-      return Math.hypot(dx, dy) <= BACKLOG_GOLD_BLAST_RADIUS;
-    });
-    let destroyed = 0;
-    for (const tile of blastTiles) {
-      if (damageBacklogTile(state, tile, 1)) destroyed += 1;
-    }
-    if (blastTiles.length > 0) {
-      state.banner = destroyed > 1
-        ? "BACKLOG BLAST"
-        : destroyed === 1
-        ? "CELL PURGED"
-        : "BACKLOG CRACKED";
-    }
-  }
-  if (
-    damagePlayerInBlast &&
-    state.player.invulnerableFor <= 0 &&
-    Math.hypot(state.player.x - bomb.x, state.player.y - bomb.y) <= 76 + PLAYER_RADIUS
-  ) {
-    damagePlayer(
-      state,
-      1,
-      bomb.kind === "red"
-        ? "Failed to heed the blinking red warning"
-        : "Held onto an unstable return for too long",
-    );
-  }
-  burstParticles(state, bomb.x, bomb.y, bomb.kind === "red" ? "#ff526e" : "#f8d477", 28);
-  state.screenShake = Math.max(state.screenShake, 0.72);
-  removeBacklogBomb(state, bomb);
-}
-
-function bounceBacklogBombOffTile(
-  state: GameState,
-  bomb: BacklogBomb,
-  tile: BacklogTile,
-) {
-  const left = tile.x - tile.width / 2;
-  const right = tile.x + tile.width / 2;
-  const top = tile.y - tile.height / 2;
-  const bottom = tile.y + tile.height / 2;
-  if (bomb.previousY >= bottom) {
-    bomb.y = bottom + bomb.radius;
-    bomb.vy = Math.abs(bomb.vy);
-  } else if (bomb.previousY <= top) {
-    bomb.y = top - bomb.radius;
-    bomb.vy = -Math.abs(bomb.vy);
-  } else if (bomb.previousX <= left) {
-    bomb.x = left - bomb.radius;
-    bomb.vx = -Math.abs(bomb.vx);
-  } else if (bomb.previousX >= right) {
-    bomb.x = right + bomb.radius;
-    bomb.vx = Math.abs(bomb.vx);
-  } else {
-    bomb.vy *= -1;
-  }
-  bomb.returned = false;
-  const destroyed = damageBacklogTile(state, tile, 1);
-  if (!destroyed) {
-    state.banner = `RETENTION: ${tile.health} HIT${tile.health === 1 ? "" : "S"} LEFT`;
-  } else if (!tile.special && !tile.drop) {
-    state.banner = "CELL PURGED";
-  }
-  state.screenShake = Math.max(state.screenShake, 0.28);
-}
-
-function removeBacklogBomb(state: GameState, bomb: BacklogBomb) {
-  state.backlogBombs = state.backlogBombs.filter((candidate) => candidate !== bomb);
-  if (
-    bomb.kind === "returnable" &&
-    !state.backlogBombs.some((candidate) => candidate.kind === "returnable")
-  ) state.backlogBombCooldown = 0.9;
-}
-
-function damageBacklogTile(state: GameState, tile: BacklogTile, damage: number) {
-  tile.health = Math.max(0, tile.health - damage);
-  if (tile.health > 0) {
-    burstParticles(state, tile.x, tile.y, "#fff0bd", 4);
-    return false;
-  }
-  destroyBacklogTile(state, tile);
-  state.backlogTiles = state.backlogTiles.filter((candidate) => candidate !== tile);
-  return true;
-}
-
-function destroyBacklogTile(state: GameState, tile: BacklogTile) {
-  state.score += tile.collector ? 25 : 12;
-  const color = tile.special === "cache"
-    ? "#71f6bd"
-    : tile.special === "duplicate"
-    ? "#ff7eb6"
-    : tile.collector
-    ? "#f8d477"
-    : "#70dff2";
-  burstParticles(state, tile.x, tile.y, color, 10);
-  if (tile.special === "cache") {
-    state.player.ammo = state.player.magazineSize;
-    state.player.reloadFor = 0;
-    state.banner = "CACHE RECOVERED";
-  } else if (tile.special === "duplicate" || tile.drop === "enemy") {
-    const livingAdds = state.enemies.filter((enemy) =>
-      enemy.kind !== "boss" && enemy.health > 0
-    ).length;
-    if (livingAdds < 3) {
-      const enemy = spawnEnemy(state, "file", () => nextRandom(state), 0.9);
-      enemy.x = tile.x;
-      enemy.y = tile.y;
-      state.enemies.push(enemy);
-      state.banner = "DUPLICATE RESTORED";
-    }
-  } else if (tile.drop === "powerup") {
-    spawnPowerupDrop(
-      state,
-      choosePowerupKind(state, () => nextRandom(state)),
-      tile.x,
-      tile.y,
-      true,
-      true,
-    );
-    state.banner = "BONUS FEATURE UNLOCKED";
-  } else if (tile.drop === "repair") {
-    spawnPowerupDrop(state, "repair", tile.x, tile.y, true, true);
-    state.banner = "+1 HP AVAILABLE";
-  } else if (tile.drop === "bomb") {
-    spawnBacklogBonusBall(state, tile.x, tile.y);
-    state.banner = "MULTIBALL-ISH";
-  }
-}
-
-function spawnBacklogBonusBall(state: GameState, x: number, y: number) {
-  state.backlogBombs.push({
-    x,
-    y,
-    previousX: x,
-    previousY: y,
-    vx: 0,
-    vy: 145,
-    radius: 11,
-    kind: "returnable",
-    returned: false,
-    lobFor: 0,
-    lobDuration: 0,
-    life: BACKLOG_GOLD_FUSE,
-    maxLife: BACKLOG_GOLD_FUSE,
-  });
-  burstParticles(state, x, y, "#f8d477", 14);
-}
-
-function beginBacklogFirewall(state: GameState) {
-  const quotes = ACTS[state.actIndex].boss.breakoutQuotes;
-  const boss = state.enemies.find((enemy) => enemy.bossKind === "backlog");
-  state.backlogIntermissionStage = 1;
-  state.backlogIntermissionFor = state.backlogHits === 2
-    ? BACKLOG_SECOND_WIPE_WARNING
-    : 1.35 * DIFFICULTIES[state.mode].warningMultiplier;
-  state.backlogFirewallWarningFor = state.backlogIntermissionFor;
-  state.backlogRebuildAfterWall = true;
-  state.backlogFirewallDirection = state.backlogHits >= 3 ? 1 : 0;
-  if (state.backlogHits === 2) {
-    const margin = BACKLOG_FIREWALL_GAP_WIDTH / 2 + 34;
-    const leftMaximum = Math.max(margin, state.width * 0.34);
-    const rightMinimum = Math.min(state.width - margin, state.width * 0.66);
-    const beginLeft = nextRandom(state) < 0.5;
-    const maximumTraversal = BASE_PLAYER_SPEED * (BACKLOG_MAZE_WALL_INTERVAL - 0.35);
-    const gaps: number[] = [];
-    for (let layer = 0; layer < BACKLOG_MAZE_WALL_COUNT; layer++) {
-      const useLeft = layer % 2 === 0 ? beginLeft : !beginLeft;
-      const minimum = useLeft ? margin : rightMinimum;
-      const maximum = useLeft ? leftMaximum : state.width - margin;
-      const rolled = minimum + nextRandom(state) * Math.max(0, maximum - minimum);
-      const previous = gaps.at(-1) ?? state.player.x;
-      gaps.push(clamp(rolled, previous - maximumTraversal, previous + maximumTraversal));
-    }
-    state.backlogFirewallGaps = gaps;
-  }
-  const text = quotes?.firewalls[Math.max(0, state.backlogHits - 1)];
-  const dialogueFor = state.backlogHits === 2 ? BACKLOG_SECOND_WIPE_WARNING : 2.4;
-  if (text && boss) showBossDialogue(state, text, boss.x, boss.y, dialogueFor, "danger");
-}
-
-function updateBacklogDeepCleanCycle(state: GameState, dt: number) {
-  if (state.backlogScanStep >= BACKLOG_SCAN_DIRECTIONS.length) return;
-  state.backlogScanNextFor -= dt;
-  if (state.backlogScanNextFor > 0) return;
-  spawnBacklogScan(state, state.backlogScanStep);
-  state.backlogScanStep += 1;
-  state.backlogScanNextFor += BACKLOG_SCAN_INTERVAL;
-  if (state.backlogScanStep < BACKLOG_SCAN_DIRECTIONS.length) {
-    state.backlogFirewallDirection = BACKLOG_SCAN_DIRECTIONS[state.backlogScanStep];
-  }
-}
-
-function spawnBacklogScan(state: GameState, step: number) {
-  const direction = BACKLOG_SCAN_DIRECTIONS[step];
-  const speed = BACKLOG_FIREWALL_SPEED * (1.12 + step * 0.035);
-  spawnBacklogFirewall(state, direction, 1, speed);
-  state.banner = BACKLOG_SCAN_BANNERS[step];
-}
-
-function spawnBacklogFirewall(
-  state: GameState,
-  direction: number,
-  layers: number,
-  speed = BACKLOG_FIREWALL_SPEED,
-) {
-  const vertical = direction === 1 || direction === 3;
-  const span = vertical ? state.height : state.width;
-  const radius = 8;
-  const spacing = 14;
-  const layerGap = 44;
-  const velocityX = direction === 1 ? -speed : direction === 3 ? speed : 0;
-  const velocityY = direction === 0 ? speed : direction === 2 ? -speed : 0;
-  for (let layer = 0; layer < layers; layer++) {
-    const trailing = layer * layerGap;
-    const originX = direction === 1
-      ? state.width + radius + trailing
-      : direction === 3
-      ? -radius - trailing
-      : 0;
-    const originY = direction === 0
-      ? -radius - trailing
-      : direction === 2
-      ? state.height + radius + trailing
-      : 0;
-    const life = ((vertical ? state.width : state.height) + trailing + 80) /
-      speed;
-    for (let offset = -radius; offset <= span + radius; offset += spacing) {
-      if (state.projectiles.length >= MAX_PROJECTILES) return;
-      const x = vertical ? originX : offset;
-      const y = vertical ? offset : originY;
-      state.projectiles.push({
-        id: state.nextProjectileId++,
-        x,
-        y,
-        previousX: x,
-        previousY: y,
-        vx: velocityX * DIFFICULTIES[state.mode].projectileSpeedMultiplier,
-        vy: velocityY * DIFFICULTIES[state.mode].projectileSpeedMultiplier,
-        radius,
-        damage: 1,
-        pierce: 0,
-        life,
-        friendly: false,
-        hitIds: [],
-        bouncesRemaining: 0,
-        reflected: false,
-        pattern: "backlog-firewall",
-      });
-    }
-  }
-}
-
-function updateBacklogGapMaze(state: GameState, dt: number) {
-  if (state.backlogMazeWallIndex >= state.backlogFirewallGaps.length) return;
-  state.backlogMazeNextWallFor -= dt;
-  if (state.backlogMazeNextWallFor > 0) return;
-  const speed = BACKLOG_FIREWALL_SPEED * (1 + state.backlogHits * 0.06) * 1.08;
-  spawnBacklogMazeWall(
-    state,
-    state.backlogFirewallGaps[state.backlogMazeWallIndex],
-    speed,
-  );
-  state.backlogMazeWallIndex += 1;
-  state.backlogMazeNextWallFor += BACKLOG_MAZE_WALL_INTERVAL;
-}
-
-function spawnBacklogMazeWall(state: GameState, gapX: number | undefined, speed: number) {
-  const radius = 8;
-  const spacing = 14;
-  const redWall = BACKLOG_MAZE_RED_WALLS.has(state.backlogMazeWallIndex);
-  const originY = redWall ? radius : -radius;
-  const life = (state.height + 100) / speed;
-  const movingRank = state.backlogMazeWallIndex -
-    (BACKLOG_MAZE_WALL_COUNT - BACKLOG_MAZE_MOVING_WALLS);
-  const gapHalf =
-    (movingRank >= 0 ? BACKLOG_MOVING_FIREWALL_GAP_WIDTH : BACKLOG_FIREWALL_GAP_WIDTH) / 2;
-  const horizontalSpeed = movingRank >= 0
-    ? (movingRank % 2 === 0 ? -1 : 1) * (42 + movingRank * 10)
-    : 0;
-  const horizontalPadding = Math.abs(horizontalSpeed) * life + spacing;
-  state.banner = redWall ? "UNSKIPPABLE — TAB REQUIRED" : BACKLOG_MAZE_BANNERS[
-    Math.min(state.backlogMazeWallIndex, BACKLOG_MAZE_BANNERS.length - 1)
-  ];
-  for (
-    let x = -radius - horizontalPadding;
-    x <= state.width + radius + horizontalPadding;
-    x += spacing
-  ) {
-    if (!redWall && gapX !== undefined && Math.abs(x - gapX) < gapHalf + radius) continue;
-    state.projectiles.push({
-      id: state.nextProjectileId++,
-      x,
-      y: originY,
-      previousX: x,
-      previousY: originY,
-      vx: horizontalSpeed,
-      vy: speed * DIFFICULTIES[state.mode].projectileSpeedMultiplier,
-      radius,
-      damage: 1,
-      pierce: 0,
-      life,
-      friendly: false,
-      hitIds: [],
-      bouncesRemaining: 0,
-      reflected: false,
-      pattern: redWall ? "backlog-firewall-red" : "backlog-firewall",
-      warningFor: redWall ? BACKLOG_RED_WALL_WARNING : 0,
-    });
-  }
-}
-
 function updateBackfillDaemon(
   state: GameState,
   enemy: Enemy,
@@ -2538,108 +1665,6 @@ function updateHazards(state: GameState, dt: number) {
       hazard.radius = Math.min(74, hazard.radius + dt * 12);
     }
   }
-}
-
-function resolveBacklogTileProjectileCollisions(state: GameState) {
-  if (
-    state.phase !== "boss" ||
-    state.backlogIntroStage < BACKLOG_INTRO_ACTIVE_STAGE ||
-    state.backlogIntermissionStage > 0 ||
-    state.backlogTiles.length === 0
-  ) return;
-  for (const projectile of state.projectiles) {
-    if (!projectile.friendly || projectile.life <= 0) continue;
-    const tile = state.backlogTiles.find(
-      (candidate) => segmentHitsBacklogTile(projectile, candidate),
-    );
-    if (!tile) continue;
-    burstParticles(
-      state,
-      projectile.x,
-      projectile.y,
-      tile.collector ? "#f8d477" : "#70dff2",
-      3,
-    );
-    projectile.life = -1;
-  }
-}
-
-function resolveBacklogBombProjectileCollisions(state: GameState) {
-  if (
-    state.backlogIntroStage < BACKLOG_INTRO_ACTIVE_STAGE ||
-    state.backlogIntermissionStage > 0
-  ) return;
-  for (const bomb of state.backlogBombs) {
-    if (bomb.kind !== "returnable" || bomb.returned || bomb.lobFor > 0) continue;
-    const projectile = state.projectiles.find((candidate) =>
-      candidate.friendly &&
-      candidate.life > 0 &&
-      sweptMovingCirclesIntersect(
-        candidate,
-        bomb,
-        bomb.radius + candidate.radius + BACKLOG_BOMB_INTERCEPT_PADDING,
-      )
-    );
-    if (!projectile) continue;
-    returnBacklogBomb(state, bomb, projectile.vx, projectile.vy);
-    projectile.life = -1;
-    state.enemyHits += 1;
-  }
-}
-
-function resolveBacklogFirewallProjectileCollisions(state: GameState) {
-  if (state.phase !== "boss" || ACTS[state.actIndex].boss.kind !== "backlog") return;
-  for (const projectile of state.projectiles) {
-    if (!projectile.friendly || projectile.life <= 0) continue;
-    const segment = state.projectiles.find((candidate) =>
-      !candidate.friendly &&
-      candidate.life > 0 &&
-      candidate.pattern === "backlog-firewall" &&
-      sweptMovingCirclesIntersect(
-        projectile,
-        candidate,
-        projectile.radius + candidate.radius,
-      )
-    );
-    if (!segment) continue;
-    segment.life = -1;
-    burstParticles(state, segment.x, segment.y, "#f8d477", 5);
-    state.enemyHits += 1;
-    if (projectile.pierce <= 0) projectile.life = -1;
-    else projectile.pierce -= 1;
-  }
-}
-
-function resolveBacklogBombBossCollisions(state: GameState) {
-  if (
-    state.phase !== "boss" ||
-    ACTS[state.actIndex].boss.kind !== "backlog" ||
-    state.backlogIntermissionStage > 0
-  ) return;
-  const boss = state.enemies.find((enemy) => enemy.bossKind === "backlog" && enemy.health > 0);
-  if (!boss) return;
-  const bomb = state.backlogBombs.find((candidate) =>
-    candidate.kind === "returnable" &&
-    candidate.returned &&
-    candidate.lobFor <= 0 &&
-    sweptMovingCirclesIntersect(candidate, boss, boss.radius + candidate.radius + 20)
-  );
-  if (bomb) landBacklogHit(state, boss);
-}
-
-function returnBacklogBomb(
-  state: GameState,
-  bomb: BacklogBomb,
-  directionX: number,
-  directionY: number,
-) {
-  const magnitude = Math.hypot(directionX, directionY) || 1;
-  bomb.vx = (directionX / magnitude) * BACKLOG_RETURN_SPEED;
-  bomb.vy = (directionY / magnitude) * BACKLOG_RETURN_SPEED;
-  bomb.returned = true;
-  state.banner = "RETURN TO SENDER";
-  state.screenShake = Math.max(state.screenShake, 0.35);
-  burstParticles(state, bomb.x, bomb.y, "#70dff2", 12);
 }
 
 function resolveProjectileCollisions(state: GameState, random: () => number) {
@@ -3318,10 +2343,6 @@ function clearNearbyHostileProjectiles(state: GameState) {
   }
 }
 
-function isBacklogFirewallPattern(pattern: Projectile["pattern"]) {
-  return pattern === "backlog-firewall" || pattern === "backlog-firewall-red";
-}
-
 function resetDropDirector(state: GameState) {
   state.dropCooldown = 0;
   state.killsSincePowerupDrop = 0;
@@ -3608,208 +2629,6 @@ function orbitPlayer(
     dt;
 }
 
-function chooseWeightedKind(
-  weights: Partial<Record<EnemyKind, number>>,
-  random: () => number,
-) {
-  const entries = Object.entries(weights).filter(
-    (entry) => (entry[1] ?? 0) > 0,
-  ) as [EnemyKind, number][];
-  const total = entries.reduce((sum, entry) => sum + entry[1], 0);
-  let roll = random() * total;
-  for (const [kind, weight] of entries) {
-    roll -= weight;
-    if (roll <= 0) return kind;
-  }
-  return entries.at(-1)?.[0] ?? "file";
-}
-
-function enemyStats(kind: EnemyKind) {
-  if (kind === "media") {
-    return { radius: 15, speed: 61, health: 3, points: 28, damage: 1 };
-  }
-  if (kind === "library") {
-    return { radius: 20, speed: 44, health: 6, points: 74, damage: 1 };
-  }
-  if (kind === "malicious") {
-    return { radius: 13, speed: 60, health: 3, points: 58, damage: 1 };
-  }
-  if (kind === "duplicate") {
-    return { radius: 14, speed: 67, health: 3, points: 48, damage: 1 };
-  }
-  if (kind === "corruptor") {
-    return { radius: 16, speed: 50, health: 4, points: 68, damage: 1 };
-  }
-  if (kind === "buffering") {
-    return { radius: 12, speed: 78, health: 2, points: 44, damage: 1 };
-  }
-  if (kind === "support") {
-    return { radius: 15, speed: 54, health: 4, points: 82, damage: 1 };
-  }
-  return { radius: 11, speed: 82, health: 1, points: 12, damage: 1 };
-}
-
-function enemyCost(kind: EnemyKind) {
-  if (kind === "library" || kind === "support") return 4;
-  if (kind === "corruptor" || kind === "malicious" || kind === "duplicate") {
-    return 3;
-  }
-  if (kind === "media" || kind === "buffering") return 2;
-  return 1;
-}
-
-function adjustedBudget(state: GameState, budget: number) {
-  return Math.round(budget * DIFFICULTIES[state.mode].spawnBudgetMultiplier);
-}
-
-function segmentHitsCircle(
-  projectile: Pick<Projectile, "x" | "y" | "previousX" | "previousY">,
-  circle: Point,
-  radius: number,
-) {
-  const vx = projectile.x - projectile.previousX;
-  const vy = projectile.y - projectile.previousY;
-  const lengthSquared = vx * vx + vy * vy;
-  const projection = lengthSquared === 0 ? 0 : clamp(
-    ((circle.x - projectile.previousX) * vx +
-      (circle.y - projectile.previousY) * vy) /
-      lengthSquared,
-    0,
-    1,
-  );
-  const closestX = projectile.previousX + vx * projection;
-  const closestY = projectile.previousY + vy * projection;
-  return Math.hypot(circle.x - closestX, circle.y - closestY) <= radius;
-}
-
-function sweptMovingCirclesIntersect(
-  first: Point & { previousX?: number; previousY?: number },
-  second: Point & { previousX?: number; previousY?: number },
-  radius: number,
-) {
-  return segmentsWithinDistance(
-    first.previousX ?? first.x,
-    first.previousY ?? first.y,
-    first.x,
-    first.y,
-    second.previousX ?? second.x,
-    second.previousY ?? second.y,
-    second.x,
-    second.y,
-    radius,
-  );
-}
-
-function segmentsWithinDistance(
-  firstStartX: number,
-  firstStartY: number,
-  firstEndX: number,
-  firstEndY: number,
-  secondStartX: number,
-  secondStartY: number,
-  secondEndX: number,
-  secondEndY: number,
-  distance: number,
-) {
-  const firstDx = firstEndX - firstStartX;
-  const firstDy = firstEndY - firstStartY;
-  const secondDx = secondEndX - secondStartX;
-  const secondDy = secondEndY - secondStartY;
-  const denominator = firstDx * secondDy - firstDy * secondDx;
-  if (Math.abs(denominator) > 0.000001) {
-    const offsetX = secondStartX - firstStartX;
-    const offsetY = secondStartY - firstStartY;
-    const firstTime = (offsetX * secondDy - offsetY * secondDx) / denominator;
-    const secondTime = (offsetX * firstDy - offsetY * firstDx) / denominator;
-    if (firstTime >= 0 && firstTime <= 1 && secondTime >= 0 && secondTime <= 1) return true;
-  }
-  const distanceSquared = distance * distance;
-  return pointSegmentDistanceSquared(
-        firstStartX,
-        firstStartY,
-        secondStartX,
-        secondStartY,
-        secondEndX,
-        secondEndY,
-      ) <= distanceSquared ||
-    pointSegmentDistanceSquared(
-        firstEndX,
-        firstEndY,
-        secondStartX,
-        secondStartY,
-        secondEndX,
-        secondEndY,
-      ) <= distanceSquared ||
-    pointSegmentDistanceSquared(
-        secondStartX,
-        secondStartY,
-        firstStartX,
-        firstStartY,
-        firstEndX,
-        firstEndY,
-      ) <= distanceSquared ||
-    pointSegmentDistanceSquared(
-        secondEndX,
-        secondEndY,
-        firstStartX,
-        firstStartY,
-        firstEndX,
-        firstEndY,
-      ) <= distanceSquared;
-}
-
-function pointSegmentDistanceSquared(
-  pointX: number,
-  pointY: number,
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number,
-) {
-  const dx = endX - startX;
-  const dy = endY - startY;
-  const lengthSquared = dx * dx + dy * dy;
-  const projection = lengthSquared === 0
-    ? 0
-    : clamp(((pointX - startX) * dx + (pointY - startY) * dy) / lengthSquared, 0, 1);
-  const closestX = startX + dx * projection;
-  const closestY = startY + dy * projection;
-  const offsetX = pointX - closestX;
-  const offsetY = pointY - closestY;
-  return offsetX * offsetX + offsetY * offsetY;
-}
-
-function segmentHitsBacklogTile(
-  projectile: Pick<Projectile, "x" | "y" | "previousX" | "previousY" | "radius">,
-  tile: BacklogTile,
-) {
-  const minX = tile.x - tile.width / 2 - projectile.radius;
-  const maxX = tile.x + tile.width / 2 + projectile.radius;
-  const minY = tile.y - tile.height / 2 - projectile.radius;
-  const maxY = tile.y + tile.height / 2 + projectile.radius;
-  const dx = projectile.x - projectile.previousX;
-  const dy = projectile.y - projectile.previousY;
-  let near = 0;
-  let far = 1;
-  for (
-    const [origin, delta, minimum, maximum] of [
-      [projectile.previousX, dx, minX, maxX],
-      [projectile.previousY, dy, minY, maxY],
-    ]
-  ) {
-    if (Math.abs(delta) < 0.0001) {
-      if (origin < minimum || origin > maximum) return false;
-      continue;
-    }
-    const first = (minimum - origin) / delta;
-    const second = (maximum - origin) / delta;
-    near = Math.max(near, Math.min(first, second));
-    far = Math.min(far, Math.max(first, second));
-    if (near > far) return false;
-  }
-  return true;
-}
-
 function burstParticles(
   state: GameState,
   x: number,
@@ -3847,25 +2666,4 @@ function enemyColor(enemy: Enemy) {
   if (enemy.kind === "media") return "#a978e8";
   if (enemy.kind === "library") return "#f3a65a";
   return "#ef6f79";
-}
-
-function nextRandom(state: GameState) {
-  let value = state.rngState >>> 0;
-  value ^= value << 13;
-  value ^= value >>> 17;
-  value ^= value << 5;
-  state.rngState = value >>> 0;
-  return state.rngState / 0x1_0000_0000;
-}
-
-function createSeed() {
-  try {
-    return crypto.getRandomValues(new Uint32Array(1))[0] || 1;
-  } catch {
-    return (Date.now() ^ Math.floor(Math.random() * 0xffff_ffff)) >>> 0;
-  }
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
 }
