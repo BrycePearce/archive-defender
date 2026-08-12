@@ -7,7 +7,9 @@ Deno.test("arcade ships three complete authored acts", () => {
   assertEquals(new Set(ACTS.map((act) => act.boss.kind)).size, 3);
   assertEquals(ACTS[0].miniboss?.kind, "backfill-daemon");
   assertEquals(ACTS[0].miniboss?.afterEncounterIndex, 1);
-  assertEquals(ACTS[0].miniboss?.health, 110);
+  assertEquals(ACTS[0].miniboss?.health, 175);
+  assertEquals(ACTS[0].boss.health, 4);
+  assertEquals(ACTS[0].boss.breakoutQuotes?.hits.length, 3);
   assertEquals(
     ACTS.flatMap((act) => act.encounters).map((encounter) => encounter.objective),
     ["purge", "relay", "survive", "purge", "relay", "survive", "purge", "relay", "survive"],

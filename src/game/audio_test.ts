@@ -145,3 +145,26 @@ Deno.test("music settings apply to both crossfade elements", () => {
   assertEquals(second.element.volume, 0);
   audio.destroy();
 });
+
+Deno.test("a staged miniboss entrance keeps music silent until its fight cue", async () => {
+  const first = fakeAudio();
+  const second = fakeAudio();
+  const audio = new ArcadeAudio(
+    [first.element, second.element],
+    TRACKS,
+    createDefaultSave().settings,
+  );
+
+  audio.startFor(0, "encounter");
+  await Promise.resolve();
+  audio.silenceMusic();
+  audio.resume();
+  await Promise.resolve();
+  assertEquals(first.plays(), 1);
+
+  audio.startFor(0, "miniboss");
+  await Promise.resolve();
+  assertEquals(second.element.src, "/backfill-miniboss.ogg");
+  assertEquals(second.plays(), 1);
+  audio.destroy();
+});

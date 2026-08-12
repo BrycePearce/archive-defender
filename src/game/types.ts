@@ -92,6 +92,8 @@ export interface Player extends Point {
 
 export interface Enemy extends Point {
   id: number;
+  previousX?: number;
+  previousY?: number;
   kind: EnemyKind;
   radius: number;
   speed: number;
@@ -102,6 +104,8 @@ export interface Enemy extends Point {
   aimAngle: number;
   behaviorCooldown: number;
   warningFor: number;
+  bossAttackStep?: number;
+  bossAttackPending?: number;
   phase: number;
   orbitDirection: number;
   splitGeneration: number;
@@ -126,6 +130,37 @@ export interface Projectile extends Point {
   hitIds: number[];
   bouncesRemaining: number;
   reflected: boolean;
+  pattern?: "backfill-wall" | "backlog-firewall";
+}
+
+export interface BacklogTile extends Point {
+  id: number;
+  anchorX: number;
+  width: number;
+  height: number;
+  health: number;
+  maxHealth: number;
+  row: number;
+  column: number;
+  collector: boolean;
+  special?: "cache" | "duplicate";
+  drop?: "enemy" | "powerup" | "repair" | "bomb";
+  entranceFor: number;
+}
+
+export interface BacklogBomb extends Point {
+  previousX: number;
+  previousY: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  kind: "returnable" | "red";
+  returned: boolean;
+  lobFor: number;
+  lobDuration: number;
+  life: number;
+  maxLife: number;
+  bonusDrop?: boolean;
 }
 
 export interface RelayCache extends Point {
@@ -146,6 +181,7 @@ export interface PowerupDrop extends Point {
   kind: TemporaryPowerupKind;
   radius: number;
   life: number;
+  fallSpeed?: number;
 }
 
 export interface ActivePowerups {
@@ -216,14 +252,28 @@ export interface BossDefinition {
   health: number;
   speed: number;
   points: number;
+  breakoutQuotes?: {
+    intro: string[];
+    start: string;
+    hits: string[];
+    firewalls: string[];
+    redBomb: string[];
+    volleys: string[];
+    misses: string[];
+    defeat: string;
+  };
 }
 
 export interface MinibossDefinition extends BossDefinition {
   afterEncounterIndex: number;
   quotes: {
     intro: string;
+    introNever: string;
+    introReaction: string;
     phaseTwo: string;
     phaseThree: string;
+    summon: string[];
+    wallAttack: string;
     defeat: string;
   };
 }
@@ -232,6 +282,8 @@ export interface BossDialogue extends Point {
   text: string;
   life: number;
   maxLife: number;
+  tone?: "normal" | "danger";
+  revealRate?: number;
 }
 
 export interface DifficultyConfig {
@@ -337,6 +389,34 @@ export interface GameState {
   patternKind: "aimed" | "radial" | null;
   bossDialogue: BossDialogue | null;
   minibossDefeatFor: number;
+  minibossIntroStage: number;
+  minibossIntroFor: number;
+  minibossFightStarts: number;
+  backlogFightStarts: number;
+  bossImpactCues: number;
+  backfillWallCooldown: number;
+  backfillWallWarningFor: number;
+  backfillWallDirection: number;
+  backlogTiles: BacklogTile[];
+  backlogBombs: BacklogBomb[];
+  backlogBombCooldown: number;
+  backlogRedBombCooldown: number;
+  backlogBombThrowIndex: number;
+  backlogTargetColumn: number;
+  backlogIntroStage: number;
+  backlogIntroFor: number;
+  backlogDialogueAdvanceHeld: boolean;
+  backlogHits: number;
+  backlogIntermissionStage: number;
+  backlogIntermissionFor: number;
+  backlogFirewallWarningFor: number;
+  backlogFirewallDirection: number;
+  backlogFirewallGaps: number[];
+  backlogMazeWallIndex: number;
+  backlogMazeNextWallFor: number;
+  backlogScanStep: number;
+  backlogScanNextFor: number;
+  backlogRebuildAfterWall: boolean;
   banner: string;
   gameOverReason?: string;
 }

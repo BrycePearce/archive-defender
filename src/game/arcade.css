@@ -17,6 +17,36 @@
   letter-spacing: -0.035em;
 }
 
+.arcade-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.arcade-level-selector {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.arcade-level-selector span {
+  color: color-mix(in oklab, currentColor 50%, transparent);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.arcade-level-selector select {
+  max-width: min(20rem, 40vw);
+  padding: 0.38rem 1.8rem 0.38rem 0.55rem;
+  border: 1px solid color-mix(in oklab, currentColor 16%, transparent);
+  border-radius: 0.45rem;
+  background: var(--color-base-200);
+  color: var(--color-base-content);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
 .arcade-kicker {
   display: flex;
   align-items: center;
@@ -691,6 +721,15 @@
 
   .arcade-heading {
     align-items: flex-start;
+  }
+
+  .arcade-heading-actions {
+    align-items: flex-end;
+    flex-direction: column-reverse;
+  }
+
+  .arcade-level-selector select {
+    max-width: 48vw;
   }
 
   .arcade-hud {

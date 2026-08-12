@@ -14,6 +14,7 @@ export type ArcadeSfx =
   | "reward"
   | "boss"
   | "boss-phase"
+  | "never"
   | "boss-clear"
   | "boss-defeat"
   | "talk"
@@ -87,6 +88,7 @@ export class ArcadeAudio {
   private cue: MusicCue | null = null;
   private openingStateKey: string | null = null;
   private paused = false;
+  private musicSilenced = false;
   private readonly sampleVoices = new Set<HTMLAudioElement>();
   private readonly lastSfxAt = new Map<ArcadeSfx, number>();
   private sampleIndex = 0;
@@ -127,12 +129,13 @@ export class ArcadeAudio {
     }
     if (!settings.musicEnabled) {
       for (const element of this.musicElements) element.pause();
-    } else if (!this.paused && this.cue) {
+    } else if (!this.paused && !this.musicSilenced && this.cue) {
       this.playActiveMusic();
     }
   }
 
   startFor(actIndex: number, phase: GamePhase, endlessRound = 0) {
+    this.musicSilenced = false;
     const stateKey = `${actIndex}:${phase}:${endlessRound}`;
     if (this.cue === null) this.openingStateKey = stateKey;
     if (this.openingStateKey !== null && this.openingStateKey !== stateKey) {
@@ -196,6 +199,12 @@ export class ArcadeAudio {
     this.startFor(actIndex, phase, endlessRound);
   }
 
+  silenceMusic() {
+    this.musicSilenced = true;
+    this.stopFade(false);
+    for (const element of this.musicElements) element.pause();
+  }
+
   pause() {
     this.paused = true;
     for (const element of this.musicElements) element.pause();
@@ -211,7 +220,7 @@ export class ArcadeAudio {
     if (!this.cue) return;
     this.paused = false;
     if (this.context?.state === "suspended") void this.context.resume();
-    if (this.settings.musicEnabled) this.playActiveMusic();
+    if (this.settings.musicEnabled && !this.musicSilenced) this.playActiveMusic();
   }
 
   playSfx(kind: ArcadeSfx) {
@@ -247,6 +256,7 @@ export class ArcadeAudio {
       reward: [660, 0.24, "triangle", 0.12],
       boss: [74, 0.55, "sawtooth", 0.18],
       "boss-phase": [320, 0.32, "sawtooth", 0.14],
+      never: [118, 0.68, "sawtooth", 0.2],
       "boss-clear": [392, 0.62, "triangle", 0.09],
       "boss-defeat": [58, 0.7, "sawtooth", 0.2],
       talk: [610, 0.08, "square", 0.04],
@@ -285,6 +295,9 @@ export class ArcadeAudio {
     if (kind === "damage") {
       oscillator.frequency.exponentialRampToValueAtTime(48, now + duration);
     }
+    if (kind === "never") {
+      oscillator.frequency.exponentialRampToValueAtTime(42, now + duration);
+    }
     envelope.gain.setValueAtTime(volume, now);
     envelope.gain.exponentialRampToValueAtTime(0.001, now + duration);
     oscillator.connect(envelope);
@@ -296,6 +309,7 @@ export class ArcadeAudio {
   destroy() {
     this.stopFade(false);
     this.cue = null;
+    this.musicSilenced = false;
     this.openingStateKey = null;
     for (const element of this.musicElements) {
       element.pause();
@@ -338,6 +352,7 @@ export class ArcadeAudio {
   }
 
   private playActiveMusic() {
+    if (this.musicSilenced) return;
     const active = this.musicElements[this.activeElementIndex];
     void active.play().catch(() => undefined);
     if (this.outgoingElementIndex !== null && this.fadeProgress < 1) {

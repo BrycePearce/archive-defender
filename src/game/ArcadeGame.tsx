@@ -23,9 +23,11 @@ import {
   getActProgress,
   getCurrentEncounter,
   getObjectiveLabel,
+  jumpToTestLevel,
   resizeGameState,
   stepGame,
 } from "./engine.ts";
+import type { TestLevelTarget } from "./engine.ts";
 import { ArcadeInputController } from "./input.ts";
 import { ArcadeAudio } from "./audio.ts";
 import { ARCADE_OPENING_TRACK_URL, claimArcadeLaunchMusic } from "../arcadeLaunch.ts";
@@ -125,6 +127,36 @@ const SLIDER_INPUT_TYPE = ["ra", "nge"].join(
   "",
 ) as React.HTMLInputTypeAttribute;
 
+const LOCAL_TEST_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const TEST_LEVELS = ACTS.flatMap((act, actIndex) => [
+  ...act.encounters.map((encounter, encounterIndex) => ({
+    id: `${actIndex}:encounter:${encounterIndex}`,
+    label: `Job ${encounterIndex + 1} — ${encounter.name}`,
+    actIndex,
+    kind: "encounter" as const,
+    encounterIndex,
+  })),
+  ...(act.miniboss
+    ? [{
+      id: `${actIndex}:miniboss`,
+      label: `Miniboss — ${act.miniboss.name}`,
+      actIndex,
+      kind: "miniboss" as const,
+    }]
+    : []),
+  {
+    id: `${actIndex}:boss`,
+    label: `Boss — ${act.boss.name}`,
+    actIndex,
+    kind: "boss" as const,
+  },
+]);
+
+function isLocalTestHost() {
+  return typeof globalThis.location !== "undefined" &&
+    LOCAL_TEST_HOSTS.has(globalThis.location.hostname);
+}
+
 export interface ArcadeGameProps {
   onExit?: () => void;
   exitLabel?: string;
@@ -150,6 +182,9 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
     shieldBlocks: 0,
     bossPhaseChanges: 0,
     minibossDefeatFor: 0,
+    minibossFightStarts: 0,
+    backlogFightStarts: 0,
+    bossImpactCues: 0,
     dialogueText: "",
     projectileId: 1,
     dashCooldown: 0,
@@ -196,12 +231,30 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
   const beginAudio = useCallback(() => {
     const state = stateRef.current;
     if (!state || state.phase === "title") return;
+    if (
+      (state.phase === "miniboss" && state.minibossFightStarts === 0) ||
+      (state.phase === "boss" &&
+        ACTS[state.actIndex].boss.kind === "backlog" &&
+        state.backlogFightStarts === 0)
+    ) {
+      audioRef.current?.silenceMusic();
+      return;
+    }
     audioRef.current?.startFor(state.actIndex, state.phase, state.endlessRound);
   }, []);
 
   const beginOpeningAudio = useCallback(() => {
     const state = stateRef.current;
     if (!state || state.phase === "title") return;
+    if (
+      (state.phase === "miniboss" && state.minibossFightStarts === 0) ||
+      (state.phase === "boss" &&
+        ACTS[state.actIndex].boss.kind === "backlog" &&
+        state.backlogFightStarts === 0)
+    ) {
+      audioRef.current?.silenceMusic();
+      return;
+    }
     audioRef.current?.startOpeningFor(
       state.actIndex,
       state.phase,
@@ -220,11 +273,20 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
     (state: GameState, previous: GamePhase) => {
       if (state.phase === previous) return;
       if (ACTIVE_PHASES.has(state.phase) && !pausedRef.current) {
-        audioRef.current?.startFor(
-          state.actIndex,
-          state.phase,
-          state.endlessRound,
-        );
+        if (
+          (state.phase === "miniboss" && state.minibossFightStarts === 0) ||
+          (state.phase === "boss" &&
+            ACTS[state.actIndex].boss.kind === "backlog" &&
+            state.backlogFightStarts === 0)
+        ) {
+          audioRef.current?.silenceMusic();
+        } else {
+          audioRef.current?.startFor(
+            state.actIndex,
+            state.phase,
+            state.endlessRound,
+          );
+        }
       }
       if (state.phase === "reward") audioRef.current?.playSfx("reward");
       if (state.phase === "boss" || state.phase === "miniboss") {
@@ -346,7 +408,15 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
         resizeGameState(stateRef.current, cssWidth, cssHeight);
       }
       if (ACTIVE_PHASES.has(stateRef.current.phase)) {
-        if (adoptingLaunchMusic) {
+        if (
+          (stateRef.current.phase === "miniboss" &&
+            stateRef.current.minibossFightStarts === 0) ||
+          (stateRef.current.phase === "boss" &&
+            ACTS[stateRef.current.actIndex].boss.kind === "backlog" &&
+            stateRef.current.backlogFightStarts === 0)
+        ) {
+          audio.silenceMusic();
+        } else if (adoptingLaunchMusic) {
           adoptingLaunchMusic = false;
           audio.startOpeningFor(
             stateRef.current.actIndex,
@@ -461,6 +531,15 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
       if (state.bossPhaseChanges > previousSignals.bossPhaseChanges) {
         audio.playSfx("boss-phase");
       }
+      if (state.bossImpactCues > previousSignals.bossImpactCues) {
+        audio.playSfx("never");
+      }
+      if (state.minibossFightStarts > previousSignals.minibossFightStarts) {
+        audio.startFor(state.actIndex, state.phase, state.endlessRound);
+      }
+      if (state.backlogFightStarts > previousSignals.backlogFightStarts) {
+        audio.startFor(state.actIndex, state.phase, state.endlessRound);
+      }
       if (state.minibossDefeatFor > previousSignals.minibossDefeatFor) {
         audio.playSfx("boss-defeat");
       }
@@ -477,6 +556,9 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
         shieldBlocks: state.shieldBlocks,
         bossPhaseChanges: state.bossPhaseChanges,
         minibossDefeatFor: state.minibossDefeatFor,
+        minibossFightStarts: state.minibossFightStarts,
+        backlogFightStarts: state.backlogFightStarts,
+        bossImpactCues: state.bossImpactCues,
         dialogueText,
         projectileId: state.nextProjectileId,
         dashCooldown: state.player.dashCooldown,
@@ -537,6 +619,9 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
       shieldBlocks: state.shieldBlocks,
       bossPhaseChanges: state.bossPhaseChanges,
       minibossDefeatFor: state.minibossDefeatFor,
+      minibossFightStarts: state.minibossFightStarts,
+      backlogFightStarts: state.backlogFightStarts,
+      bossImpactCues: state.bossImpactCues,
       dialogueText: state.bossDialogue?.text ?? "",
       projectileId: state.nextProjectileId,
       dashCooldown: 0,
@@ -574,6 +659,9 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
       shieldBlocks: stateRef.current.shieldBlocks,
       bossPhaseChanges: stateRef.current.bossPhaseChanges,
       minibossDefeatFor: stateRef.current.minibossDefeatFor,
+      minibossFightStarts: stateRef.current.minibossFightStarts,
+      backlogFightStarts: stateRef.current.backlogFightStarts,
+      bossImpactCues: stateRef.current.bossImpactCues,
       dialogueText: stateRef.current.bossDialogue?.text ?? "",
       projectileId: stateRef.current.nextProjectileId,
       dashCooldown: 0,
@@ -646,8 +734,53 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
     commitSave((draft) => Object.assign(draft.settings, patch));
   };
 
+  const selectTestLevel = (id: string) => {
+    const level = TEST_LEVELS.find((candidate) => candidate.id === id);
+    const state = stateRef.current;
+    if (!level || !state) return;
+    const target: TestLevelTarget = level.kind === "encounter"
+      ? {
+        actIndex: level.actIndex,
+        kind: level.kind,
+        encounterIndex: level.encounterIndex,
+      }
+      : { actIndex: level.actIndex, kind: level.kind };
+    jumpToTestLevel(
+      state,
+      target,
+      state.phase === "title" ? selectedMode : state.mode,
+      state.phase === "title" ? selectedWeapon : state.weapon,
+    );
+    previousSignalsRef.current = {
+      phase: state.phase,
+      health: state.player.health,
+      score: state.score,
+      kills: state.kills,
+      enemyHits: state.enemyHits,
+      shieldBlocks: state.shieldBlocks,
+      bossPhaseChanges: state.bossPhaseChanges,
+      minibossDefeatFor: state.minibossDefeatFor,
+      minibossFightStarts: state.minibossFightStarts,
+      backlogFightStarts: state.backlogFightStarts,
+      bossImpactCues: state.bossImpactCues,
+      dialogueText: state.bossDialogue?.text ?? "",
+      projectileId: state.nextProjectileId,
+      dashCooldown: 0,
+      warningCount: 0,
+      secondaryCooldown: 0,
+      reloadFor: 0,
+      powerupCount: 0,
+      powerupsCollected: state.powerupsCollected,
+      endlessRound: state.endlessRound,
+      upgradeTargetCount: 0,
+    };
+    audioRef.current?.pause();
+    setPauseState(false);
+    setSummary(summarize(state));
+    beginOpeningAudio();
+  };
+
   const bestScore = Math.max(save.bestScores[summary.mode], summary.score);
-  const act = ACTS[summary.actIndex] ?? ACTS[0];
   const encounter = getCurrentEncounter(
     stateRef.current ?? createGameState(1, 1),
   );
@@ -743,11 +876,34 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
           </div>
           <h1 id="arcade-title">Archive Defender</h1>
         </div>
-        {onExit && (
-          <button type="button" className="btn btn-ghost btn-sm gap-2" onClick={onExit}>
-            <ArrowLeft className="size-4" /> {exitLabel}
-          </button>
-        )}
+        <div className="arcade-heading-actions">
+          {isLocalTestHost() && (
+            <label className="arcade-level-selector">
+              <span>Local test level</span>
+              <select
+                aria-label="Local test level"
+                value={testLevelId(summary)}
+                onChange={(event) => selectTestLevel(event.target.value)}
+              >
+                {ACTS.map((candidateAct, actIndex) => (
+                  <optgroup
+                    key={candidateAct.id}
+                    label={`Act ${actIndex + 1} — ${candidateAct.name}`}
+                  >
+                    {TEST_LEVELS.filter((level) => level.actIndex === actIndex).map((level) => (
+                      <option key={level.id} value={level.id}>{level.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          )}
+          {onExit && (
+            <button type="button" className="btn btn-ghost btn-sm gap-2" onClick={onExit}>
+              <ArrowLeft className="size-4" /> {exitLabel}
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="arcade-hud" aria-live="polite">
@@ -826,26 +982,18 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
         />
         {active && !paused && (
           <>
-            <div className="arcade-mission-chip">
-              <span>
-                {summary.phase === "reward"
-                  ? "Select maintenance patch"
-                  : summary.phase === "boss"
-                  ? act.boss.name
-                  : summary.phase === "miniboss"
-                  ? act.miniboss?.name
-                  : encounter?.name}
-              </span>
-              <small>
-                {summary.phase === "reward"
-                  ? "Shoot one patch to install it and continue."
-                  : summary.phase === "boss"
-                  ? act.boss.briefing
-                  : summary.phase === "miniboss"
-                  ? act.miniboss?.briefing
-                  : encounter?.briefing}
-              </small>
-            </div>
+            {summary.phase !== "boss" && summary.phase !== "miniboss" && (
+              <div className="arcade-mission-chip">
+                <span>
+                  {summary.phase === "reward" ? "Select maintenance patch" : encounter?.name}
+                </span>
+                <small>
+                  {summary.phase === "reward"
+                    ? "Shoot one patch to install it and continue."
+                    : encounter?.briefing}
+                </small>
+              </div>
+            )}
             <div className="arcade-combat-indicators">
               <div
                 className={`arcade-magazine-indicator ${
@@ -949,6 +1097,18 @@ export function ArcadeGame({ onExit, exitLabel = "Back to work" }: ArcadeGamePro
       </footer>
     </section>
   );
+}
+
+function testLevelId(summary: GameSummary) {
+  if (summary.phase === "miniboss") return `${summary.actIndex}:miniboss`;
+  if (
+    summary.phase === "boss" ||
+    summary.phase === "actComplete" ||
+    summary.phase === "victory"
+  ) {
+    return `${summary.actIndex}:boss`;
+  }
+  return `${summary.actIndex}:encounter:${summary.encounterIndex}`;
 }
 
 function TitleScreen({
