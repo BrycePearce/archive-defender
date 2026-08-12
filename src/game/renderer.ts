@@ -181,8 +181,15 @@ function drawProjectile(
   context: CanvasRenderingContext2D,
   projectile: GameState["projectiles"][number],
 ) {
-  if (projectile.pattern === "backfill-wall" || projectile.pattern === "backlog-firewall") {
+  if (
+    projectile.pattern === "backfill-wall" ||
+    projectile.pattern === "backlog-firewall" ||
+    projectile.pattern === "backlog-firewall-red"
+  ) {
     context.save();
+    if ((projectile.warningFor ?? 0) > 0) {
+      context.globalAlpha = Math.floor((projectile.warningFor ?? 0) * 14) % 2 === 0 ? 0.28 : 1;
+    }
     context.translate(projectile.x, projectile.y);
     context.rotate(Math.atan2(projectile.vy, projectile.vx));
     const backlog = projectile.pattern === "backlog-firewall";
@@ -207,7 +214,11 @@ function drawProjectile(
     context.font = "900 8px ui-monospace, monospace";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(backlog ? "▶" : "1", 0, 0);
+    context.fillText(
+      backlog ? "▶" : projectile.pattern === "backlog-firewall-red" ? "TAB" : "1",
+      0,
+      0,
+    );
     context.restore();
     return;
   }
@@ -771,7 +782,7 @@ function drawBacklogBomb(
     context.fill();
   }
   context.translate(bomb.x, bomb.y - lobLift);
-  const unstableGold = bomb.kind === "returnable" && !bomb.bonusDrop && bomb.life < 3;
+  const unstableGold = bomb.kind === "returnable" && bomb.life < 3;
   const fuseProgress = unstableGold ? 1 - Math.max(0, bomb.life) / 3 : 0;
   const flashRed = unstableGold &&
     Math.sin(state.elapsed * (13 + fuseProgress * 25)) > 0;
@@ -799,7 +810,7 @@ function drawBacklogBomb(
   context.font = "900 8px ui-monospace, monospace";
   if (bomb.lobFor <= 0 && ((!bomb.returned && !unstableGold) || bomb.kind === "red")) {
     context.fillText(
-      bomb.kind === "red" ? (urgent ? "MOVE!" : "") : bomb.bonusDrop ? "CATCH" : "RETURN",
+      bomb.kind === "red" ? (urgent ? "MOVE!" : "") : "RETURN",
       0,
       bomb.radius + 15,
     );

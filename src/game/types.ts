@@ -130,7 +130,8 @@ export interface Projectile extends Point {
   hitIds: number[];
   bouncesRemaining: number;
   reflected: boolean;
-  pattern?: "backfill-wall" | "backlog-firewall";
+  pattern?: "backfill-wall" | "backlog-firewall" | "backlog-firewall-red";
+  warningFor?: number;
 }
 
 export interface BacklogTile extends Point {
@@ -160,7 +161,6 @@ export interface BacklogBomb extends Point {
   lobDuration: number;
   life: number;
   maxLife: number;
-  bonusDrop?: boolean;
 }
 
 export interface RelayCache extends Point {

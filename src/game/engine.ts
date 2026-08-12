@@ -60,6 +60,8 @@ const BACKLOG_MOVING_FIREWALL_GAP_WIDTH = 82;
 const BACKLOG_MAZE_WALL_COUNT = 10;
 const BACKLOG_MAZE_WALL_INTERVAL = 2.1;
 const BACKLOG_MAZE_MOVING_WALLS = 4;
+const BACKLOG_MAZE_RED_WALLS = new Set([3, 7]);
+const BACKLOG_RED_WALL_WARNING = 0.9;
 const BACKLOG_SCAN_INTERVAL = 2.75;
 const BACKLOG_SECOND_HIT_PAUSE = 3;
 const BACKLOG_SECOND_WIPE_WARNING = 3;
@@ -1206,6 +1208,10 @@ function updateProjectiles(state: GameState, dt: number, freezeHostile = false) 
   for (const projectile of state.projectiles) {
     projectile.previousX = projectile.x;
     projectile.previousY = projectile.y;
+    if ((projectile.warningFor ?? 0) > 0) {
+      projectile.warningFor = Math.max(0, (projectile.warningFor ?? 0) - dt);
+      continue;
+    }
     if (freezeHostile && !projectile.friendly) continue;
     projectile.x += projectile.vx * dt;
     projectile.y += projectile.vy * dt;
@@ -1350,7 +1356,7 @@ function updateSingularity(state: GameState, dt: number, random: () => number) {
       projectile.friendly ||
       projectile.life <= 0 ||
       projectile.pattern === "backfill-wall" ||
-      projectile.pattern === "backlog-firewall"
+      isBacklogFirewallPattern(projectile.pattern)
     ) {
       continue;
     }
@@ -1382,7 +1388,7 @@ function updateSingularity(state: GameState, dt: number, random: () => number) {
     if (
       !projectile.friendly &&
       projectile.pattern !== "backfill-wall" &&
-      projectile.pattern !== "backlog-firewall" &&
+      !isBacklogFirewallPattern(projectile.pattern) &&
       Math.hypot(projectile.x - singularity.x, projectile.y - singularity.y) <= collapseRadius
     ) {
       projectile.life = -1;
@@ -1960,7 +1966,7 @@ function updateSingleBacklogBomb(
   }
   if (bomb.y > state.height + bomb.radius) {
     removeBacklogBomb(state, bomb);
-    if (bomb.kind === "returnable" && !bomb.returned && !bomb.bonusDrop) {
+    if (bomb.kind === "returnable" && !bomb.returned) {
       const quotes = ACTS[state.actIndex].boss.breakoutQuotes?.misses ?? [];
       const quote = quotes[state.backlogBombThrowIndex % quotes.length];
       if (quote) showBossDialogue(state, quote, boss.x, boss.y, 1.8);
@@ -1973,7 +1979,7 @@ function updateSingleBacklogBomb(
     bomb.returned = false;
   }
 
-  if (bomb.kind === "returnable" && !bomb.bonusDrop) {
+  if (bomb.kind === "returnable") {
     const struckTile = state.backlogTiles.find((tile) => segmentHitsBacklogTile(bomb, tile));
     if (struckTile) {
       bounceBacklogBombOffTile(state, bomb, struckTile);
@@ -1985,17 +1991,6 @@ function updateSingleBacklogBomb(
     Math.hypot(bomb.x - state.player.x, bomb.y - state.player.y) <=
       bomb.radius + PLAYER_RADIUS
   ) {
-    if (bomb.bonusDrop) {
-      bomb.bonusDrop = false;
-      bomb.returned = true;
-      bomb.vx = (nextRandom(state) - 0.5) * 180;
-      bomb.vy = -BACKLOG_RETURN_SPEED;
-      bomb.life = BACKLOG_GOLD_FUSE;
-      bomb.maxLife = BACKLOG_GOLD_FUSE;
-      state.banner = "MULTIBALL CAUGHT";
-      burstParticles(state, bomb.x, bomb.y, "#f8d477", 18);
-      return;
-    }
     if (state.player.invulnerableFor <= 0) damagePlayer(state, 1, "Archived by the backlog");
     explodeBacklogBomb(state, bomb, false);
     return;
@@ -2235,7 +2230,6 @@ function spawnBacklogBonusBall(state: GameState, x: number, y: number) {
     lobDuration: 0,
     life: BACKLOG_GOLD_FUSE,
     maxLife: BACKLOG_GOLD_FUSE,
-    bonusDrop: true,
   });
   burstParticles(state, x, y, "#f8d477", 14);
 }
@@ -2361,7 +2355,8 @@ function updateBacklogGapMaze(state: GameState, dt: number) {
 function spawnBacklogMazeWall(state: GameState, gapX: number | undefined, speed: number) {
   const radius = 8;
   const spacing = 14;
-  const originY = -radius;
+  const redWall = BACKLOG_MAZE_RED_WALLS.has(state.backlogMazeWallIndex);
+  const originY = redWall ? radius : -radius;
   const life = (state.height + 100) / speed;
   const movingRank = state.backlogMazeWallIndex -
     (BACKLOG_MAZE_WALL_COUNT - BACKLOG_MAZE_MOVING_WALLS);
@@ -2371,7 +2366,7 @@ function spawnBacklogMazeWall(state: GameState, gapX: number | undefined, speed:
     ? (movingRank % 2 === 0 ? -1 : 1) * (42 + movingRank * 10)
     : 0;
   const horizontalPadding = Math.abs(horizontalSpeed) * life + spacing;
-  state.banner = BACKLOG_MAZE_BANNERS[
+  state.banner = redWall ? "UNSKIPPABLE — TAB REQUIRED" : BACKLOG_MAZE_BANNERS[
     Math.min(state.backlogMazeWallIndex, BACKLOG_MAZE_BANNERS.length - 1)
   ];
   for (
@@ -2379,7 +2374,7 @@ function spawnBacklogMazeWall(state: GameState, gapX: number | undefined, speed:
     x <= state.width + radius + horizontalPadding;
     x += spacing
   ) {
-    if (gapX !== undefined && Math.abs(x - gapX) < gapHalf + radius) continue;
+    if (!redWall && gapX !== undefined && Math.abs(x - gapX) < gapHalf + radius) continue;
     state.projectiles.push({
       id: state.nextProjectileId++,
       x,
@@ -2396,7 +2391,8 @@ function spawnBacklogMazeWall(state: GameState, gapX: number | undefined, speed:
       hitIds: [],
       bouncesRemaining: 0,
       reflected: false,
-      pattern: "backlog-firewall",
+      pattern: redWall ? "backlog-firewall-red" : "backlog-firewall",
+      warningFor: redWall ? BACKLOG_RED_WALL_WARNING : 0,
     });
   }
 }
@@ -2659,6 +2655,7 @@ function resolveProjectileCollisions(state: GameState, random: () => number) {
     (projectile) =>
       projectile.life > 0 &&
       !projectile.friendly &&
+      (projectile.warningFor ?? 0) <= 0 &&
       segmentHitsCircle(
         projectile,
         state.player,
@@ -2828,9 +2825,9 @@ function compactState(state: GameState) {
     .filter(
       (projectile) =>
         projectile.life > 0 &&
-        projectile.x > (projectile.pattern === "backlog-firewall" ? -600 : -80) &&
-        projectile.x < state.width + (projectile.pattern === "backlog-firewall" ? 600 : 80) &&
-        projectile.y > (projectile.pattern === "backlog-firewall" ? -600 : -80) &&
+        projectile.x > (isBacklogFirewallPattern(projectile.pattern) ? -600 : -80) &&
+        projectile.x < state.width + (isBacklogFirewallPattern(projectile.pattern) ? 600 : 80) &&
+        projectile.y > (isBacklogFirewallPattern(projectile.pattern) ? -600 : -80) &&
         projectile.y < state.height + 80,
     )
     .slice(-MAX_PROJECTILES);
@@ -3275,7 +3272,7 @@ function clearNearbyHostileProjectiles(state: GameState) {
     if (
       !projectile.friendly &&
       projectile.pattern !== "backfill-wall" &&
-      projectile.pattern !== "backlog-firewall" &&
+      !isBacklogFirewallPattern(projectile.pattern) &&
       Math.hypot(
           projectile.x - state.player.x,
           projectile.y - state.player.y,
@@ -3284,6 +3281,10 @@ function clearNearbyHostileProjectiles(state: GameState) {
       projectile.life = -1;
     }
   }
+}
+
+function isBacklogFirewallPattern(pattern: Projectile["pattern"]) {
+  return pattern === "backlog-firewall" || pattern === "backlog-firewall-red";
 }
 
 function resetDropDirector(state: GameState) {

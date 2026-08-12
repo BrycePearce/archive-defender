@@ -944,6 +944,13 @@ Deno.test("the second Backlog wipe intervals ten reachable gaps with autoplay jo
     stepGame(state, idleInput, 1 / 60, () => 0.5);
     assertGreater(state.projectiles.length, 20);
     const wallVelocity = state.projectiles[0].vx;
+    const redWall = wall === 3 || wall === 7;
+    assert(
+      state.projectiles.every((shot) =>
+        shot.pattern === (redWall ? "backlog-firewall-red" : "backlog-firewall")
+      ),
+    );
+    if (redWall) assertGreater(state.projectiles[0].warningFor ?? 0, 0.8);
     assert(state.projectiles.every((shot) => shot.vx === wallVelocity));
     if (wall < 6) assertEquals(wallVelocity, 0);
     else {
@@ -951,11 +958,15 @@ Deno.test("the second Backlog wipe intervals ten reachable gaps with autoplay jo
       assertEquals(Math.sign(wallVelocity), wall % 2 === 0 ? -1 : 1);
       assertEquals(Math.abs(wallVelocity), 42 + (wall - 6) * 10);
     }
-    const movedGap = state.backlogFirewallGaps[wall] + wallVelocity / 60;
+    const movedGap = state.backlogFirewallGaps[wall] + (redWall ? 0 : wallVelocity / 60);
     const safeDistance = wall < 6 ? 40 : 49;
-    assert(
-      state.projectiles.every((shot) => Math.abs(shot.x - movedGap) >= safeDistance),
-    );
+    if (redWall) {
+      assert(state.projectiles.some((shot) => Math.abs(shot.x - movedGap) < 8));
+    } else {
+      assert(
+        state.projectiles.every((shot) => Math.abs(shot.x - movedGap) >= safeDistance),
+      );
+    }
   }
   assertEquals(state.backlogMazeWallIndex, 10);
   assertEquals(state.banner, "SEASON FINALE (PART 1 OF 6)");
@@ -1033,6 +1044,51 @@ Deno.test("ordinary fire can carve a passage through Backlog firewall segments",
   assertEquals(state.projectiles.some((candidate) => candidate.friendly), false);
 });
 
+Deno.test("red Backlog walls resist gunfire and Deep Scan", () => {
+  const state = backlogBossState();
+  activateBacklogBoss(state);
+  state.backlogHits = 2;
+  state.backlogTiles = [];
+  state.backlogIntermissionStage = 2;
+  state.backlogIntermissionFor = 10;
+  state.backlogMazeWallIndex = 10;
+  const wallId = state.nextProjectileId++;
+  state.projectiles = [
+    projectile({
+      id: wallId,
+      x: state.player.x,
+      y: state.player.y - 60,
+      previousX: state.player.x,
+      previousY: state.player.y - 60,
+      friendly: false,
+      pattern: "backlog-firewall-red",
+      radius: 8,
+    }),
+    projectile({
+      id: state.nextProjectileId++,
+      x: state.player.x,
+      y: state.player.y - 60,
+      previousX: state.player.x,
+      previousY: state.player.y - 60,
+    }),
+  ];
+
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  assert(state.projectiles.some((candidate) => candidate.id === wallId));
+
+  stepGame(
+    state,
+    {
+      ...idleInput,
+      aim: { x: state.player.x, y: state.player.y - 100 },
+      secondary: true,
+    },
+    1 / 60,
+    () => 0.5,
+  );
+  assert(state.projectiles.some((candidate) => candidate.id === wallId));
+});
+
 Deno.test("Deep Scan carves a corridor through Backlog firewall segments", () => {
   const state = backlogBossState();
   activateBacklogBoss(state);
@@ -1105,19 +1161,11 @@ Deno.test("Backlog walls mix durability and authored breakout rewards", () => {
 
   assertEquals(state.backlogBombs.length, 2);
   assertEquals(state.banner, "MULTIBALL-ISH");
-  const bonusBall = state.backlogBombs.find((bomb) => bomb.bonusDrop);
+  const bonusBall = state.backlogBombs.find((bomb) => bomb.lobDuration === 0);
   assert(bonusBall);
-  bonusBall.x = state.player.x;
-  bonusBall.y = state.player.y - 4;
-  bonusBall.previousX = bonusBall.x;
-  bonusBall.previousY = bonusBall.y;
-
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
-
-  assertEquals(bonusBall.bonusDrop, false);
-  assert(bonusBall.returned);
-  assert(bonusBall.vy < 0);
-  assertEquals(state.banner, "MULTIBALL CAUGHT");
+  assertEquals(bonusBall.kind, "returnable");
+  assertEquals(bonusBall.returned, false);
+  assertEquals(bonusBall.vy, 145);
 });
 
 Deno.test("brick powerups fall toward the player and expire below the arena", () => {
@@ -1155,6 +1203,37 @@ Deno.test("brick powerups fall toward the player and expire below the arena", ()
   drop.y = state.height + drop.radius + 1;
   stepGame(state, idleInput, 1 / 60, () => 0.5);
   assertEquals(state.powerupDrops.some((candidate) => candidate.id === drop.id), false);
+});
+
+Deno.test("extra gold balls immediately obey normal breakout ricochet rules", () => {
+  const state = backlogBossState();
+  activateBacklogBoss(state);
+  const tile = state.backlogTiles.find((candidate) => candidate.row === 3);
+  assert(tile);
+  state.backlogTiles = [tile];
+  const originalHealth = tile.health;
+  const startY = tile.y - tile.height / 2 - 13;
+  state.backlogBombs = [{
+    x: tile.x,
+    y: startY,
+    previousX: tile.x,
+    previousY: startY,
+    vx: 0,
+    vy: 390,
+    radius: 11,
+    kind: "returnable",
+    returned: false,
+    lobFor: 0,
+    lobDuration: 0,
+    life: 12,
+    maxLife: 15,
+  }];
+
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+
+  assertEquals(tile.health, originalHealth - 1);
+  assert(state.backlogBombs[0].vy < 0);
+  assertEquals(state.backlogBombs[0].returned, false);
 });
 
 Deno.test("the fourth returned bomb pauses for the Maybe Later punchline", () => {
