@@ -92,6 +92,7 @@ Deno.test("dash grants temporary invulnerability and moves quickly", () => {
   assertGreater(state.player.x - before, 8);
   assertGreater(state.player.invulnerableFor, 0);
   assertGreater(state.player.dashCooldown, 2);
+  assertEquals(state.player.hitFlashFor, 0);
 });
 
 Deno.test("swept collision removes an enemy crossed between frames", () => {
@@ -126,6 +127,7 @@ Deno.test("hostile projectiles damage the player once", () => {
 
   assertEquals(state.player.health, 2);
   assertGreater(state.player.invulnerableFor, 0);
+  assertGreater(state.player.hitFlashFor, 0);
 });
 
 Deno.test("finishing an encounter offers three non-maxed upgrades", () => {

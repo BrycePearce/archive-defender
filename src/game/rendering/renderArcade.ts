@@ -2,6 +2,7 @@ import { ACTS, UPGRADE_BY_ID } from "../content.ts";
 import { getCurrentEncounter } from "../engine.ts";
 import type { TouchVisuals } from "../input.ts";
 import type { ArcadeSettings, GameState, Hazard } from "../types.ts";
+import { BASE_DASH_COOLDOWN } from "../engine/config.ts";
 import {
   drawBacklogBomb,
   drawBacklogFirewallWarning,
@@ -231,7 +232,9 @@ function drawProjectile(
     return;
   }
   if (projectile.friendly) {
-    context.strokeStyle = projectile.reflected
+    context.strokeStyle = projectile.prismatic
+      ? "rgba(182, 135, 255, 0.58)"
+      : projectile.reflected
       ? "rgba(112, 223, 242, 0.58)"
       : "rgba(248, 212, 119, 0.42)";
     context.lineWidth = projectile.radius;
@@ -239,8 +242,16 @@ function drawProjectile(
     context.moveTo(projectile.previousX, projectile.previousY);
     context.lineTo(projectile.x, projectile.y);
     context.stroke();
-    context.fillStyle = projectile.reflected ? "#70dff2" : "#f8d477";
-    context.shadowColor = projectile.reflected ? "#70dff2" : "#f8d477";
+    context.fillStyle = projectile.prismatic
+      ? "#b687ff"
+      : projectile.reflected
+      ? "#70dff2"
+      : "#f8d477";
+    context.shadowColor = projectile.prismatic
+      ? "#b687ff"
+      : projectile.reflected
+      ? "#70dff2"
+      : "#f8d477";
   } else {
     context.strokeStyle = "rgba(255, 91, 116, 0.48)";
     context.lineWidth = 2;
@@ -260,21 +271,70 @@ function drawProjectile(
 
 function drawPlayer(context: CanvasRenderingContext2D, state: GameState) {
   const { player } = state;
-  if (player.invulnerableFor > 0 && Math.floor(player.invulnerableFor * 14) % 2 === 0) return;
   const palette = ACTS[state.actIndex].palette;
   context.save();
   context.translate(player.x, player.y);
-  context.rotate(player.angle);
+
   if (player.dashFor > 0) {
     context.strokeStyle = colorWithAlpha(palette.primary, 0.28);
     context.lineWidth = 8;
+    context.lineCap = "round";
     context.beginPath();
-    context.moveTo(-35, 0);
-    context.lineTo(-8, 0);
+    context.moveTo(-player.dashX * 42, -player.dashY * 42);
+    context.lineTo(-player.dashX * 9, -player.dashY * 9);
+    context.stroke();
+
+    for (const [distance, alpha] of [[14, 0.2], [27, 0.1]] as const) {
+      context.save();
+      context.translate(-player.dashX * distance, -player.dashY * distance);
+      context.rotate(player.angle);
+      context.globalAlpha = alpha;
+      drawPlayerBody(context, palette.primary, palette.background);
+      context.restore();
+    }
+  }
+
+  if (player.dashCooldown > 0) {
+    const cooldownDuration = BASE_DASH_COOLDOWN *
+      Math.pow(0.82, state.upgrades["io-burst"] ?? 0);
+    const progress = 1 - player.dashCooldown / cooldownDuration;
+    const width = 24;
+    context.fillStyle = "rgba(255, 255, 255, 0.14)";
+    context.fillRect(-width / 2, 28, width, 3);
+    context.fillStyle = colorWithAlpha(palette.primary, 0.88);
+    context.fillRect(-width / 2, 28, width * Math.max(0, Math.min(1, progress)), 3);
+  }
+
+  if (player.hitFlashFor > 0 && Math.floor(player.hitFlashFor * 14) % 2 === 0) {
+    context.restore();
+    return;
+  }
+
+  context.rotate(player.angle);
+  if (player.dashFor > 0) {
+    context.shadowColor = palette.primary;
+    context.shadowBlur = 12;
+  }
+  drawPlayerBody(context, palette.primary, palette.background);
+  context.shadowBlur = 0;
+  if (player.shield > 0 || state.activePowerups.shieldFor > 0) {
+    context.strokeStyle = "#70dff2";
+    context.lineWidth = state.activePowerups.shieldFor > 0 ? 3 : 2;
+    context.globalAlpha = 0.72 + Math.sin(state.elapsed * 5) * 0.18;
+    context.beginPath();
+    context.arc(0, 2, 23, 0, Math.PI * 2);
     context.stroke();
   }
-  context.strokeStyle = palette.primary;
-  context.fillStyle = palette.background;
+  context.restore();
+}
+
+function drawPlayerBody(
+  context: CanvasRenderingContext2D,
+  strokeStyle: string,
+  fillStyle: string,
+) {
+  context.strokeStyle = strokeStyle;
+  context.fillStyle = fillStyle;
   context.lineWidth = 3;
   context.lineCap = "round";
   context.beginPath();
@@ -292,15 +352,6 @@ function drawPlayer(context: CanvasRenderingContext2D, state: GameState) {
   context.moveTo(0, 9);
   context.lineTo(7, 17);
   context.stroke();
-  if (player.shield > 0 || state.activePowerups.shieldFor > 0) {
-    context.strokeStyle = "#70dff2";
-    context.lineWidth = state.activePowerups.shieldFor > 0 ? 3 : 2;
-    context.globalAlpha = 0.72 + Math.sin(state.elapsed * 5) * 0.18;
-    context.beginPath();
-    context.arc(0, 2, 23, 0, Math.PI * 2);
-    context.stroke();
-  }
-  context.restore();
 }
 
 function drawBossDialogue(
@@ -619,10 +670,15 @@ function drawDeepScan(
     : [state.player.angle];
   const beamWidth = 10 * Math.pow(1.3, state.upgrades["wide-query"] ?? 0);
   const length = Math.hypot(width, height) * 1.4;
+  const colors = state.activePowerups.prism > 0
+    ? ["#b687ff", "#e7ffff", "#f8d477"]
+    : angles.map(() => "#e7ffff");
   context.save();
   context.globalAlpha = Math.min(1, state.player.beamFlashFor / 0.08);
-  for (const angle of angles) {
-    context.strokeStyle = "rgba(112, 223, 242, 0.28)";
+  for (let index = 0; index < angles.length; index++) {
+    const angle = angles[index];
+    const color = colors[index];
+    context.strokeStyle = colorWithAlpha(color, 0.28);
     context.lineWidth = beamWidth * 2.4;
     context.beginPath();
     context.moveTo(state.player.x, state.player.y);
@@ -631,7 +687,7 @@ function drawDeepScan(
       state.player.y + Math.sin(angle) * length,
     );
     context.stroke();
-    context.strokeStyle = "#e7ffff";
+    context.strokeStyle = color;
     context.lineWidth = Math.max(2, beamWidth * 0.42);
     context.stroke();
   }

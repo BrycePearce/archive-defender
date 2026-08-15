@@ -119,6 +119,7 @@ export function createGameState(
       shield: checkpoint?.shield ?? 0,
       angle: 0,
       invulnerableFor: 0,
+      hitFlashFor: 0,
       fireCooldown: 0,
       ammo: 14,
       magazineSize: 14,
@@ -398,6 +399,7 @@ export function stepGame(
     }
     updateProjectiles(state, dt);
     resolveUpgradeTargetCollisions(state);
+    updatePowerupDrops(state, 0);
     updateParticles(state, dt);
     compactState(state);
     return;
@@ -423,14 +425,19 @@ export function stepGame(
   resolvePlayerCollisions(state);
   updateParticles(state, dt);
   updateObjective(state, dt);
-  updatePowerupDrops(state, dt);
+  updatePowerupDrops(state, powerupDropDelta(state, dt));
   compactState(state);
 }
 
 export const stepArcade = stepGame;
 
+function powerupDropDelta(state: GameState, dt: number) {
+  return state.phase === "reward" ? 0 : dt;
+}
+
 function updateTimers(state: GameState, dt: number) {
   state.player.invulnerableFor = Math.max(0, state.player.invulnerableFor - dt);
+  state.player.hitFlashFor = Math.max(0, state.player.hitFlashFor - dt);
   state.player.fireCooldown = Math.max(0, state.player.fireCooldown - dt);
   if (state.player.reloadFor > 0) {
     state.player.reloadFor = Math.max(0, state.player.reloadFor - dt);
@@ -448,7 +455,11 @@ function updateTimers(state: GameState, dt: number) {
     0,
     state.player.secondaryCooldown - dt,
   );
-  state.activePowerups.freezeFor = Math.max(0, state.activePowerups.freezeFor - dt);
+  if (state.phase !== "reward") {
+    state.activePowerups.reflect = Math.max(0, state.activePowerups.reflect - dt);
+    state.activePowerups.prism = Math.max(0, state.activePowerups.prism - dt);
+    state.activePowerups.freezeFor = Math.max(0, state.activePowerups.freezeFor - dt);
+  }
   state.player.beamFlashFor = Math.max(0, state.player.beamFlashFor - dt);
   state.player.dashCooldown = Math.max(0, state.player.dashCooldown - dt);
   state.player.dashFor = Math.max(0, state.player.dashFor - dt);

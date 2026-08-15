@@ -25,6 +25,7 @@ import {
   MACHINE_GUN_RELOAD,
   MAX_PROJECTILES,
   PLAYER_RADIUS,
+  PRISM_SECONDARY_COOLDOWN_MULTIPLIER,
   REFLECT_BOUNCES,
   REFLECT_LIFE_MULTIPLIER,
   SUPER_SHOT_AMMO,
@@ -180,6 +181,7 @@ function createFriendlyProjectile(
     hitIds: [],
     bouncesRemaining: reflected ? REFLECT_BOUNCES : 0,
     reflected,
+    prismatic: state.activePowerups.prism > 0,
   });
 }
 
@@ -234,7 +236,8 @@ function fireDeepScan(
     BASE_SECONDARY_COOLDOWN *
       Math.pow(0.88, upgradeLevel(state, "index-accelerator")),
   );
-  state.player.secondaryCooldown = cooldown;
+  state.player.secondaryCooldown = cooldown *
+    (state.activePowerups.prism > 0 ? PRISM_SECONDARY_COOLDOWN_MULTIPLIER : 1);
   state.player.beamFlashFor = 0.16;
   const forked = upgradeLevel(state, "forked-scan") > 0 || state.activePowerups.prism > 0;
   const angles = forked

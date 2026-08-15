@@ -77,7 +77,7 @@ export function beginEncounter(state: GameState) {
   state.banner = encounter.name;
   resetDropDirector(state);
   preparePlayerForPhase(state);
-  clearArena(state);
+  clearArena(state, { preserveCollectedPowerups: true });
   while (
     state.enemies.length < encounter.openingThreats &&
     state.enemies.length < MAX_ENEMIES
@@ -99,7 +99,7 @@ export function beginBoss(state: GameState) {
   state.banner = definition.name;
   resetDropDirector(state);
   preparePlayerForPhase(state);
-  clearArena(state);
+  clearArena(state, { preserveCollectedPowerups: true });
   const boss = createBoss(state);
   state.enemies.push(boss);
   if (definition.kind === "backlog") {
@@ -169,16 +169,24 @@ export function preparePlayerForPhase(state: GameState) {
   }
 }
 
-export function clearArena(state: GameState) {
+export function clearArena(
+  state: GameState,
+  options: {
+    preservePowerupDrops?: boolean;
+    preserveCollectedPowerups?: boolean;
+  } = {},
+) {
   state.enemies = [];
   state.projectiles = [];
   state.hazards = [];
   state.particles = [];
-  state.powerupDrops = [];
+  if (!options.preservePowerupDrops) state.powerupDrops = [];
   state.relayCache = null;
   state.bossDialogue = null;
-  state.singularity = null;
-  state.activePowerups.freezeFor = 0;
+  if (!options.preserveCollectedPowerups) {
+    state.singularity = null;
+    state.activePowerups.freezeFor = 0;
+  }
   state.backlogTiles = [];
   state.backlogBombs = [];
   state.backlogBombCooldown = 0;
@@ -356,7 +364,7 @@ export function completeEncounter(state: GameState) {
   state.phase = "reward";
   state.banner = state.noDamage ? "Clean sweep" : "Sector secured";
   state.offeredUpgrades = offerUpgrades(state);
-  clearArena(state);
+  clearArena(state, { preservePowerupDrops: true });
   state.upgradeTargets = [];
   state.rewardRevealFor = REWARD_REVEAL_DELAY;
   state.rewardSelectionArmed = false;

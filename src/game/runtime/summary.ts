@@ -81,8 +81,12 @@ export function summarizeGame(state: GameState): GameSummary {
     reloadFor: state.player.reloadFor,
     secondaryCooldown: state.player.secondaryCooldown,
     powerups: [
-      state.activePowerups.reflect > 0 ? { label: "Reflect", remaining: -1 } : null,
-      state.activePowerups.prism > 0 ? { label: "Prism", remaining: -1 } : null,
+      state.activePowerups.reflect > 0
+        ? { label: "Reflect", remaining: state.activePowerups.reflect }
+        : null,
+      state.activePowerups.prism > 0
+        ? { label: "Prism", remaining: state.activePowerups.prism }
+        : null,
       state.activePowerups.shieldFor > 0 ? { label: "Shield", remaining: -1 } : null,
       state.activePowerups.freezeFor > 0
         ? { label: "Paused", remaining: state.activePowerups.freezeFor }

@@ -10,6 +10,8 @@ import {
   NORMAL_DROP_CHANCE,
   PLAYER_RADIUS,
   POWERUP_WEIGHTS,
+  PRISM_DURATION,
+  REFLECT_DURATION,
   SINGULARITY_DURATION,
   SINGULARITY_PLACEMENT_DISTANCE,
   SINGULARITY_RADIUS,
@@ -20,8 +22,6 @@ import { nextRandom } from "./random.ts";
 import { isBacklogFirewallPattern } from "./projectilePatterns.ts";
 
 export function clearRetainedPowerups(state: GameState) {
-  state.activePowerups.reflect = 0;
-  state.activePowerups.prism = 0;
   state.activePowerups.shieldFor = 0;
   state.activePowerups.shieldHits = 0;
   state.temporaryWeapon = null;
@@ -73,7 +73,7 @@ export function updatePowerupDrops(state: GameState, dt: number) {
 }
 
 export function collectPowerup(state: GameState, kind: TemporaryPowerupKind) {
-  if (kind === "reflect") state.activePowerups.reflect = 1;
+  if (kind === "reflect") state.activePowerups.reflect = REFLECT_DURATION;
   if (kind === "machine-gun") {
     state.temporaryWeapon = { kind, ammo: MACHINE_GUN_AMMO };
     state.player.reloadFor = 0;
@@ -82,7 +82,14 @@ export function collectPowerup(state: GameState, kind: TemporaryPowerupKind) {
     state.temporaryWeapon = { kind, ammo: SUPER_SHOT_AMMO };
     state.player.reloadFor = 0;
   }
-  if (kind === "prism") state.activePowerups.prism = 1;
+  if (kind === "prism") {
+    state.activePowerups.prism = PRISM_DURATION;
+    state.player.secondaryCooldown = 0;
+    state.banner = "Prismatic routing online";
+    for (const color of ["#b687ff", "#70dff2", "#f8d477"]) {
+      burstParticles(state, state.player.x, state.player.y, color, 8);
+    }
+  }
   if (kind === "freeze") {
     state.activePowerups.freezeFor = FREEZE_DURATION;
     state.banner = "All streams paused — shatter window open";

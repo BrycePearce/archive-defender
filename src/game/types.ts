@@ -77,6 +77,7 @@ export interface Player extends Point {
   shield: number;
   angle: number;
   invulnerableFor: number;
+  hitFlashFor: number;
   fireCooldown: number;
   ammo: number;
   magazineSize: number;
@@ -130,6 +131,7 @@ export interface Projectile extends Point {
   hitIds: number[];
   bouncesRemaining: number;
   reflected: boolean;
+  prismatic?: boolean;
   pattern?: "backfill-wall" | "backlog-firewall" | "backlog-firewall-red";
   warningFor?: number;
 }

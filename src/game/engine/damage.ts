@@ -18,6 +18,7 @@ export function damagePlayer(state: GameState, amount: number, reason: string) {
   state.noDamage = false;
   state.comboTimer = 0;
   state.player.invulnerableFor = 1.05;
+  state.player.hitFlashFor = 1.05;
   state.screenShake = 0.85;
   burstParticles(state, state.player.x, state.player.y, "#ff647c", 14);
   if (state.player.health <= 0) {

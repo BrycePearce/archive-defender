@@ -6,6 +6,7 @@ import {
   assertNotEquals,
 } from "@std/assert";
 import { createStateFromCheckpoint, dispatchGameAction, stepGame } from "../../engine.ts";
+import { PRISM_DURATION, REFLECT_DURATION } from "../../engine/config.ts";
 import { checkpointFromState } from "../../persistence.ts";
 import { activeState, enemy, idleInput, projectile, sequenceRandom } from "./support.ts";
 
@@ -253,6 +254,76 @@ Deno.test("shooting one physical patch installs only that upgrade", () => {
   assertGreater(state.rewardTransitionFor, 0);
 });
 
+Deno.test("uncollected powerups wait for the player on the upgrade screen", () => {
+  const state = activeState();
+  state.powerupDrops = [{
+    id: 1,
+    kind: "machine-gun",
+    x: 80,
+    y: 90,
+    radius: 13,
+    life: 3,
+    fallSpeed: 145,
+  }];
+  state.objectiveProgress = state.objectiveTarget;
+
+  stepGame(state, idleInput, 1 / 20, () => 0.5);
+
+  assertEquals(state.phase, "reward");
+  assertEquals(state.powerupDrops[0].life, 3);
+  assertEquals(state.powerupDrops[0].y, 90);
+
+  state.player.x = 80;
+  state.player.y = 90;
+  stepGame(state, idleInput, 1 / 20, () => 0.5);
+
+  assertEquals(state.powerupDrops.length, 0);
+  assertEquals(state.temporaryWeapon, { kind: "machine-gun", ammo: 48 });
+});
+
+Deno.test("powerups collected on the upgrade screen carry into the next encounter", () => {
+  const state = activeState();
+  state.objectiveProgress = state.objectiveTarget;
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  state.powerupDrops = [
+    {
+      id: 1,
+      kind: "freeze",
+      x: state.player.x,
+      y: state.player.y,
+      radius: 13,
+      life: 10,
+    },
+    {
+      id: 2,
+      kind: "singularity",
+      x: state.player.x + 100,
+      y: state.player.y,
+      radius: 13,
+      life: 10,
+    },
+  ];
+
+  stepGame(state, idleInput, 1 / 20, () => 0.5);
+  const freezeFor = state.activePowerups.freezeFor;
+  stepGame(state, idleInput, 1 / 20, () => 0.5);
+  assertEquals(state.activePowerups.freezeFor, freezeFor);
+
+  state.player.x += 100;
+  stepGame(state, idleInput, 1 / 20, () => 0.5);
+  assert(state.singularity);
+
+  dispatchGameAction(state, {
+    type: "chooseUpgrade",
+    upgradeId: state.offeredUpgrades[0],
+  });
+
+  assertEquals(state.phase, "encounter");
+  assertEquals(state.activePowerups.freezeFor, freezeFor);
+  assert(state.singularity);
+  assertEquals(state.powerupDrops.length, 0);
+});
+
 Deno.test("destroyed red documents telegraph a small damaging burst", () => {
   const state = activeState();
   state.enemies = [enemy({ x: 160, y: 150 })];
@@ -365,6 +436,55 @@ Deno.test("Reflect grants fired rounds extended life and eight wall bounces", ()
 
   for (let frame = 0; frame < 90; frame++) stepGame(state, idleInput, 1 / 20, () => 0.5);
   assertEquals(state.projectiles.length, 0);
+});
+
+Deno.test("Reflect expires eight seconds after collection", () => {
+  const state = activeState();
+  state.enemies = [];
+  state.spawnCooldown = 100;
+  state.player.invulnerableFor = 100;
+  state.powerupDrops = [{
+    id: 1,
+    kind: "reflect",
+    x: state.player.x,
+    y: state.player.y,
+    radius: 13,
+    life: 10,
+  }];
+
+  stepGame(state, idleInput, 1 / 20, () => 0.5);
+  assertEquals(state.activePowerups.reflect, REFLECT_DURATION);
+
+  for (let frame = 0; frame < REFLECT_DURATION * 20; frame++) {
+    stepGame(state, idleInput, 1 / 20, () => 0.5);
+  }
+  assertAlmostEquals(state.activePowerups.reflect, 0, 0.000001);
+});
+
+Deno.test("Prism immediately readies faster Deep Scans and marks piercing shots", () => {
+  const state = activeState();
+  state.enemies = [];
+  state.spawnCooldown = 100;
+  state.player.secondaryCooldown = 5;
+  state.powerupDrops = [{
+    id: 1,
+    kind: "prism",
+    x: state.player.x,
+    y: state.player.y,
+    radius: 13,
+    life: 10,
+  }];
+
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  assertEquals(state.activePowerups.prism, PRISM_DURATION);
+  assertEquals(state.player.secondaryCooldown, 0);
+  assertEquals(state.banner, "Prismatic routing online");
+
+  stepGame(state, { ...idleInput, secondary: true, firing: true }, 1 / 60, () => 0.5);
+
+  assertAlmostEquals(state.player.secondaryCooldown, 3.75, 0.001);
+  assertEquals(state.projectiles[0].pierce, 1);
+  assertEquals(state.projectiles[0].prismatic, true);
 });
 
 Deno.test("elite drops use the seeded pure RNG roll", () => {
@@ -523,7 +643,7 @@ Deno.test("Database Vacuum pulls enemies, consumes hostile shots, and collapses"
   assert(state.enemies[0].health < 3);
 });
 
-Deno.test("retained powerups persist until a shielded hit clears the streak", () => {
+Deno.test("weapon pickups last until a hit while effect pickups expire on timers", () => {
   const state = activeState();
   state.enemies = [];
   state.spawnCooldown = 100;
@@ -549,13 +669,13 @@ Deno.test("retained powerups persist until a shielded hit clears the streak", ()
   assertEquals(state.activePowerups.shieldFor, 1);
   assertEquals(state.projectiles.length, 0);
 
-  state.activePowerups.reflect = 1;
-  state.activePowerups.prism = 1;
+  state.activePowerups.reflect = REFLECT_DURATION;
+  state.activePowerups.prism = PRISM_DURATION;
   state.temporaryWeapon = { kind: "machine-gun", ammo: 12 };
   state.player.invulnerableFor = 100;
-  for (let frame = 0; frame < 240; frame++) stepGame(state, idleInput, 1 / 20, () => 0.5);
-  assertEquals(state.activePowerups.reflect, 1);
-  assertEquals(state.activePowerups.prism, 1);
+  for (let frame = 0; frame < 80; frame++) stepGame(state, idleInput, 1 / 20, () => 0.5);
+  assertAlmostEquals(state.activePowerups.reflect, 4, 0.001);
+  assertAlmostEquals(state.activePowerups.prism, 6, 0.001);
   assertEquals(state.activePowerups.shieldHits, 1);
   assertEquals(state.temporaryWeapon, { kind: "machine-gun", ammo: 12 });
 
@@ -570,11 +690,17 @@ Deno.test("retained powerups persist until a shielded hit clears the streak", ()
   })];
   stepGame(state, idleInput, 1 / 60, () => 0.5);
   assertEquals(state.player.health, health);
-  assertEquals(state.activePowerups.reflect, 0);
-  assertEquals(state.activePowerups.prism, 0);
+  assertGreater(state.activePowerups.reflect, 0);
+  assertGreater(state.activePowerups.prism, 0);
   assertEquals(state.activePowerups.shieldFor, 0);
   assertEquals(state.activePowerups.shieldHits, 0);
   assertEquals(state.temporaryWeapon, null);
+
+  state.activePowerups.reflect = 0.01;
+  state.activePowerups.prism = 0.01;
+  stepGame(state, idleInput, 1 / 20, () => 0.5);
+  assertEquals(state.activePowerups.reflect, 0);
+  assertEquals(state.activePowerups.prism, 0);
 });
 
 Deno.test("drop director guarantees a pickup after twelve kills and caps each encounter", () => {
