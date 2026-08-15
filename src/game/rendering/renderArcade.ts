@@ -306,8 +306,7 @@ function drawPlayer(context: CanvasRenderingContext2D, state: GameState) {
   }
 
   if (player.hitFlashFor > 0 && Math.floor(player.hitFlashFor * 14) % 2 === 0) {
-    context.restore();
-    return;
+    context.globalAlpha = 0.38;
   }
 
   context.rotate(player.angle);
