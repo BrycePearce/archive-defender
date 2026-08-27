@@ -238,6 +238,67 @@ Deno.test("Backfill Daemon defeat grants one heart, fully heals, and preserves J
   assertEquals(state.player.maxHealth, previousMaxHealth + 1);
 });
 
+Deno.test("Backfill Daemon defeat clears an active wall warning", () => {
+  const state = activeState();
+  state.encounterIndex = 1;
+  state.objectiveProgress = state.objectiveTarget;
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  const miniboss = state.enemies[0];
+  state.minibossIntroStage = 8;
+  state.player.invulnerableFor = 100;
+  miniboss.health = 0;
+  state.backfillWallCooldown = 4;
+  state.backfillWallWarningFor = 1;
+  state.backfillWallDirection = 1;
+
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+
+  assertGreater(state.minibossDefeatFor, 0);
+  assertEquals(state.backfillWallCooldown, 0);
+  assertEquals(state.backfillWallWarningFor, 0);
+  assertEquals(state.backfillWallDirection, 0);
+
+  for (let frame = 0; frame < 55; frame++) stepGame(state, idleInput, 1 / 20, () => 0.5);
+  assertEquals(state.phase, "reward");
+  assertEquals(state.backfillWallWarningFor, 0);
+});
+
+Deno.test("uncollected enemy powerups survive the miniboss defeat and reward screen", () => {
+  const state = activeState();
+  state.encounterIndex = 1;
+  state.objectiveProgress = state.objectiveTarget;
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  const miniboss = state.enemies[0];
+  state.minibossIntroStage = 8;
+  state.player.invulnerableFor = 100;
+  miniboss.health = 0;
+  state.powerupDrops = [{
+    id: 1,
+    kind: "machine-gun",
+    x: 80,
+    y: 90,
+    radius: 13,
+    life: 1,
+    fallSpeed: 145,
+  }];
+
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  assertGreater(state.minibossDefeatFor, 0);
+  assertEquals(state.powerupDrops[0].life, 1);
+  assertEquals(state.powerupDrops[0].y, 90);
+
+  for (let frame = 0; frame < 55; frame++) stepGame(state, idleInput, 1 / 20, () => 0.5);
+  assertEquals(state.phase, "reward");
+  assertEquals(state.powerupDrops[0].life, 1);
+  assertEquals(state.powerupDrops[0].y, 90);
+
+  state.player.x = 80;
+  state.player.y = 90;
+  stepGame(state, idleInput, 1 / 20, () => 0.5);
+  assertEquals(state.powerupDrops.length, 0);
+  assertEquals(state.temporaryWeapon, { kind: "machine-gun", ammo: 48 });
+});
+
 Deno.test("hard mode scales Backfill Daemon health", () => {
   const state = activeState(7, "hard");
   state.encounterIndex = 1;

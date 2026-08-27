@@ -183,6 +183,9 @@ export function clearArena(
   if (!options.preservePowerupDrops) state.powerupDrops = [];
   state.relayCache = null;
   state.bossDialogue = null;
+  state.backfillWallCooldown = 0;
+  state.backfillWallWarningFor = 0;
+  state.backfillWallDirection = 0;
   if (!options.preserveCollectedPowerups) {
     state.singularity = null;
     state.activePowerups.freezeFor = 0;
@@ -387,7 +390,9 @@ export function completeMiniboss(state: GameState) {
   state.enemies = [];
   state.projectiles = [];
   state.hazards = [];
-  state.powerupDrops = [];
+  state.backfillWallCooldown = 0;
+  state.backfillWallWarningFor = 0;
+  state.backfillWallDirection = 0;
   showBossDialogue(state, definition.quotes.defeat, x, y, 2.6);
 }
 

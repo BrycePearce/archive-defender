@@ -432,7 +432,7 @@ export function stepGame(
 export const stepArcade = stepGame;
 
 function powerupDropDelta(state: GameState, dt: number) {
-  return state.phase === "reward" ? 0 : dt;
+  return state.phase === "reward" || state.minibossDefeatFor > 0 ? 0 : dt;
 }
 
 function updateTimers(state: GameState, dt: number) {
