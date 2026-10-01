@@ -23,7 +23,10 @@ export type ArcadeSfx =
   | "select"
   | "beam"
   | "powerup"
-  | "reload";
+  | "reload"
+  | "cache-capture"
+  | "cache-expired"
+  | "countdown";
 
 export type MusicCue =
   | "stale"
@@ -223,7 +226,7 @@ export class ArcadeAudio {
     if (this.settings.musicEnabled && !this.musicSilenced) this.playActiveMusic();
   }
 
-  playSfx(kind: ArcadeSfx) {
+  playSfx(kind: ArcadeSfx, pitch = 1) {
     if (!this.settings.sfxEnabled) return;
     const nowMs = globalThis.performance?.now() ?? Date.now();
     const cooldown = SFX_COOLDOWNS[kind] ?? 0;
@@ -266,6 +269,9 @@ export class ArcadeAudio {
       beam: [980, 0.18, "sawtooth", 0.1],
       powerup: [740, 0.28, "triangle", 0.12],
       reload: [240, 0.12, "square", 0.05],
+      "cache-capture": [660, 0.2, "triangle", 0.12],
+      "cache-expired": [180, 0.25, "sine", 0.08],
+      countdown: [880, 0.07, "sine", 0.06],
     };
     const note = notes[kind];
     if (!note) return;
@@ -273,7 +279,10 @@ export class ArcadeAudio {
     const oscillator = context.createOscillator();
     const envelope = context.createGain();
     oscillator.type = wave;
-    oscillator.frequency.setValueAtTime(frequency, now);
+    oscillator.frequency.setValueAtTime(frequency * pitch, now);
+    if (kind === "cache-capture") {
+      oscillator.frequency.exponentialRampToValueAtTime(frequency * pitch * 1.5, now + duration);
+    }
     if (kind === "fire") {
       oscillator.frequency.exponentialRampToValueAtTime(280, now + duration);
     }

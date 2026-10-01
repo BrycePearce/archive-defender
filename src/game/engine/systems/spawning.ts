@@ -5,6 +5,7 @@ import { MAX_ENEMIES } from "../config.ts";
 import { adjustedBudget, chooseWeightedKind, enemyCost } from "../enemies.ts";
 import { getCurrentEncounter } from "../selectors.ts";
 import { nextRandom } from "../random.ts";
+import { positionRetentionReinforcement } from "../encounters/stacks.ts";
 
 export function updateSpawns(state: GameState, dt: number, random: () => number) {
   if (state.phase === "boss" || state.phase === "miniboss") return;
@@ -15,17 +16,21 @@ export function updateSpawns(state: GameState, dt: number, random: () => number)
 
   const encounter = getCurrentEncounter(state);
   if (!encounter) return;
-  const nextBeat = encounter.beats[state.spawnBeatIndex + 1];
-  if (nextBeat && state.phaseElapsed >= nextBeat.at) {
+  if (state.stacks.completionFor >= 0) return;
+  const clock = encounter.id === "retention-window" ? state.objectiveProgress : state.phaseElapsed;
+  let nextBeat = encounter.beats[state.spawnBeatIndex + 1];
+  while (nextBeat && clock >= nextBeat.at) {
     state.spawnBeatIndex += 1;
     state.spawnBudgetRemaining += adjustedBudget(state, nextBeat.budget);
+    nextBeat = encounter.beats[state.spawnBeatIndex + 1];
   }
 
   state.spawnCooldown -= dt;
   const hardDensity = state.mode === "hard" ? 1.3 : 1;
   const threat = currentThreat(state);
-  const threatFloor = Math.round(encounter.threatFloor * hardDensity);
-  const threatCap = Math.round(encounter.threatCap * hardDensity);
+  const sweeping = encounter.id === "retention-window" && clock >= 42;
+  const threatFloor = Math.round((sweeping ? 6 : encounter.threatFloor) * hardDensity);
+  const threatCap = Math.round((sweeping ? 14 : encounter.threatCap) * hardDensity);
   if (threat < threatFloor && state.spawnBudgetRemaining <= 0) {
     state.spawnBudgetRemaining = Math.max(1, threatCap - threat);
   }
@@ -43,7 +48,9 @@ export function updateSpawns(state: GameState, dt: number, random: () => number)
     state.spawnBudgetRemaining >= cost &&
     state.enemies.length < MAX_ENEMIES
   ) {
-    state.enemies.push(spawnEnemy(state, kind, random));
+    const enemy = spawnEnemy(state, kind, random);
+    positionRetentionReinforcement(state, enemy);
+    state.enemies.push(enemy);
     state.spawnBudgetRemaining -= cost;
   } else {
     state.spawnBudgetRemaining = 0;

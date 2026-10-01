@@ -10,6 +10,7 @@ import {
   drawBacklogTiles,
 } from "./backlog.ts";
 import { drawEnemy } from "./entities.ts";
+import { drawStacksArena, drawStacksStatus } from "./stacks.ts";
 import { clampRender, colorWithAlpha } from "./utils.ts";
 
 interface RenderOptions {
@@ -36,6 +37,7 @@ export function renderArcade(
     );
   }
   drawArena(context, state, width, height);
+  drawStacksArena(context, state, options.settings.reducedEffects);
   drawBackfillWallWarning(context, state, width, height);
   drawBacklogFirewallWarning(context, state, width, height);
   drawObjective(context, state, width, height);
@@ -58,6 +60,7 @@ export function renderArcade(
   drawPlayer(context, state);
   drawDeepScan(context, state, width, height);
   if (!options.settings.reducedEffects) drawParticles(context, state);
+  drawStacksStatus(context, state);
   drawTouchSticks(context, options.touch, palette.primary);
   if (options.paused) {
     context.fillStyle = "rgba(3, 8, 14, 0.32)";
@@ -123,9 +126,13 @@ function drawObjective(
   const palette = ACTS[state.actIndex].palette;
   const cache = state.relayCache;
   const ratio = Math.max(0, cache.timeRemaining / cache.duration);
+  const finalCache = encounter.id === "catalog-lock" && state.objectiveProgress === 9;
+  const cacheColor = ratio < 0.3 ? palette.danger : finalCache ? "#a8f2db" : palette.secondary;
   context.save();
   context.translate(cache.x, cache.y);
-  const arrivalScale = cache.arrivalFor > 0 ? 1 + cache.arrivalFor * 1.8 : 1;
+  const arrivalScale = cache.arrivalFor > 0
+    ? 1 + cache.arrivalFor * (encounter.id === "catalog-lock" ? 0.6 : 1.8)
+    : 1;
   context.scale(arrivalScale, arrivalScale);
   context.fillStyle = colorWithAlpha(palette.primary, 0.18);
   context.strokeStyle = colorWithAlpha(palette.primary, 0.78);
@@ -134,7 +141,7 @@ function drawObjective(
   context.roundRect(-13, -11, 26, 22, 4);
   context.fill();
   context.stroke();
-  context.strokeStyle = palette.secondary;
+  context.strokeStyle = cacheColor;
   context.lineWidth = 3;
   context.beginPath();
   context.arc(0, 0, 27, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
@@ -143,13 +150,13 @@ function drawObjective(
   // Give relay objectives a familiar destination silhouette in addition to the
   // cache icon and timer. The flag remains legible while enemies and effects
   // overlap the target.
-  context.strokeStyle = palette.secondary;
+  context.strokeStyle = cacheColor;
   context.lineWidth = 2;
   context.beginPath();
   context.moveTo(0, 7);
   context.lineTo(0, -36);
   context.stroke();
-  context.fillStyle = palette.secondary;
+  context.fillStyle = cacheColor;
   context.beginPath();
   context.moveTo(1, -35);
   context.lineTo(21, -29);
@@ -160,8 +167,8 @@ function drawObjective(
   context.font = "800 8px ui-monospace, monospace";
   context.textAlign = "center";
   context.textBaseline = "bottom";
-  context.fillStyle = palette.secondary;
-  context.fillText("RECOVER", 0, -42);
+  context.fillStyle = cacheColor;
+  context.fillText(finalCache ? "FINAL CACHE" : "RECOVER", 0, -42);
   context.restore();
 
   const dx = cache.x - state.player.x;

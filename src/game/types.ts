@@ -172,6 +172,25 @@ export interface RelayCache extends Point {
   arrivalFor: number;
 }
 
+export interface StacksEncounterState {
+  completionFor: number;
+  nextCache: Point | null;
+  pulse: (Point & { life: number }) | null;
+  notice: string;
+  noticeFor: number;
+  wave: number;
+  sweepIndex: number;
+  sweep: {
+    vertical: boolean;
+    position: number;
+    gap: number;
+    warningFor: number;
+  } | null;
+  terminalIndex: number;
+  terminal: (Point & { life: number; charge: number }) | null;
+  terminalsRecovered: number;
+}
+
 export interface UpgradeTarget extends Point {
   id: UpgradeId;
   radius: number;
@@ -371,6 +390,7 @@ export interface GameState {
   relayCache: RelayCache | null;
   relayStreak: number;
   relayMisses: number;
+  stacks: StacksEncounterState;
   upgradeTargets: UpgradeTarget[];
   rewardRevealFor: number;
   rewardSelectionArmed: boolean;

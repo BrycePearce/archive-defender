@@ -33,4 +33,20 @@ export function resizeGameState(state: GameState, width: number, height: number)
     bomb.previousY *= scaleY;
   }
   state.backlogFirewallGaps = state.backlogFirewallGaps.map((gap) => gap * scaleX);
+  for (
+    const point of [
+      state.relayCache,
+      state.stacks.nextCache,
+      state.stacks.pulse,
+      state.stacks.terminal,
+    ]
+  ) {
+    if (!point) continue;
+    point.x *= scaleX;
+    point.y *= scaleY;
+  }
+  if (state.stacks.sweep) {
+    state.stacks.sweep.position *= state.stacks.sweep.vertical ? scaleX : scaleY;
+    state.stacks.sweep.gap *= state.stacks.sweep.vertical ? scaleY : scaleX;
+  }
 }

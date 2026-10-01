@@ -36,14 +36,18 @@ export function getObjectiveLabel(state: GameState) {
   }
   if (encounter.objective === "relay") {
     const seconds = state.relayCache ? Math.max(0, state.relayCache.timeRemaining).toFixed(1) : "—";
-    return `${Math.floor(state.objectiveProgress)} / ${state.objectiveTarget} caches · ${seconds}s`;
+    return `${Math.floor(state.objectiveProgress)} / ${state.objectiveTarget} caches · ${seconds}s${
+      encounter.id === "catalog-lock" ? ` · chain ×${state.relayStreak}` : ""
+    }`;
   }
   return `${Math.max(0, Math.ceil(state.objectiveTarget - state.objectiveProgress))}s remaining`;
 }
 
 export function getActProgress(state: GameState) {
   if (state.phase === "boss") return 1;
-  if (state.phase === "miniboss") return 0.5;
+  if (state.phase === "miniboss") {
+    return ((ACTS[state.actIndex].miniboss?.afterEncounterIndex ?? 1) + 1) / 4;
+  }
   if (state.phase === "actComplete" || state.phase === "victory") return 1;
   return clamp(
     (state.encounterIndex + state.objectiveProgress / Math.max(1, state.objectiveTarget)) / 4,

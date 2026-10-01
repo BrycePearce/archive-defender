@@ -35,6 +35,7 @@ import { damagePlayer } from "./engine/damage.ts";
 import { clamp, segmentHitsCircle } from "./engine/geometry.ts";
 
 import { updateBackfillDaemon, updateBackfillEncounter } from "./engine/encounters/backfill.ts";
+import { createStacksEncounterState, updateStacksEncounter } from "./engine/encounters/stacks.ts";
 import { isBacklogFirewallPattern } from "./engine/projectilePatterns.ts";
 import {
   applyUpgrade,
@@ -162,6 +163,7 @@ export function createGameState(
     relayCache: null,
     relayStreak: 0,
     relayMisses: 0,
+    stacks: createStacksEncounterState(),
     upgradeTargets: [],
     rewardRevealFor: 0,
     rewardSelectionArmed: false,
@@ -418,6 +420,7 @@ export function stepGame(
   resolveBacklogBombBossCollisions(state);
   updateSingularity(state, dt, random);
   updateHazards(state, dt);
+  updateStacksEncounter(state, dt);
   resolveBacklogBombProjectileCollisions(state);
   resolveBacklogFirewallProjectileCollisions(state);
   resolveBacklogTileProjectileCollisions(state);

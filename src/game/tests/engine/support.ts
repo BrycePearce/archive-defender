@@ -1,4 +1,5 @@
-import { createGameState, dispatchGameAction, stepGame } from "../../engine.ts";
+import { createGameState, stepGame } from "../../engine.ts";
+import { beginBoss } from "../../engine/systems/progression.ts";
 import type { ArcadeInput, Enemy, GameState, Projectile } from "../../types.ts";
 
 export const idleInput: ArcadeInput = {
@@ -17,12 +18,7 @@ export function activeState(seed = 7, mode: "normal" | "hard" = "normal") {
 export function backlogBossState() {
   const state = activeState();
   state.encounterIndex = 2;
-  state.objectiveProgress = state.objectiveTarget;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
-  dispatchGameAction(state, {
-    type: "chooseUpgrade",
-    upgradeId: state.offeredUpgrades[0],
-  });
+  beginBoss(state);
   return state;
 }
 

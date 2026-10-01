@@ -27,6 +27,12 @@ import { nextRandom } from "../random.ts";
 import { getCurrentEncounter } from "../selectors.ts";
 import { isBacklogFirewallPattern } from "../projectilePatterns.ts";
 import { configureWeaponState } from "./player.ts";
+import {
+  captureCatalogCache,
+  catalogCachePosition,
+  createStacksEncounterState,
+  setStacksNotice,
+} from "../encounters/stacks.ts";
 
 export function resetForRun(
   state: GameState,
@@ -182,6 +188,7 @@ export function clearArena(
   state.particles = [];
   if (!options.preservePowerupDrops) state.powerupDrops = [];
   state.relayCache = null;
+  state.stacks = createStacksEncounterState();
   state.bossDialogue = null;
   state.backfillWallCooldown = 0;
   state.backfillWallWarningFor = 0;
@@ -240,9 +247,15 @@ export function updateObjective(state: GameState, dt: number) {
     state.objectiveProgress = state.phaseElapsed;
     return;
   }
+  if (state.phase !== "encounter") return;
 
   const encounter = getCurrentEncounter(state);
   if (!encounter) return;
+  if (state.stacks.completionFor >= 0) {
+    state.stacks.completionFor = Math.max(0, state.stacks.completionFor - dt);
+    if (state.stacks.completionFor === 0) completeEncounter(state);
+    return;
+  }
   if (encounter.objective === "relay") {
     updateRelayObjective(state, dt);
   } else if (encounter.objective === "survive") {
@@ -250,7 +263,21 @@ export function updateObjective(state: GameState, dt: number) {
   }
 
   if (state.objectiveProgress >= state.objectiveTarget) {
-    completeEncounter(state);
+    if (encounter.id === "catalog-lock" || encounter.id === "retention-window") {
+      state.stacks.completionFor = 1.4;
+      state.stacks.sweep = null;
+      state.stacks.terminal = null;
+      state.stacks.nextCache = null;
+      state.enemies = [];
+      state.projectiles = [];
+      state.hazards = [];
+      setStacksNotice(
+        state,
+        encounter.id === "catalog-lock" ? "CATALOG RESTORED" : "RETENTION PURGE COMPLETE",
+        1.4,
+      );
+      burstParticles(state, state.player.x, state.player.y, "#68d3b5", 48);
+    } else completeEncounter(state);
   }
 }
 
@@ -270,6 +297,7 @@ export function updateRelayObjective(
   if (collected) {
     state.objectiveProgress += 1;
     state.relayStreak += 1;
+    if (getCurrentEncounter(state)?.id === "catalog-lock") captureCatalogCache(state, cache);
     state.score += 35 * state.relayStreak * (state.actIndex + 1);
     burstParticles(
       state,
@@ -283,6 +311,9 @@ export function updateRelayObjective(
   } else if (cache.timeRemaining <= 0) {
     state.relayStreak = 0;
     state.relayMisses += 1;
+    if (getCurrentEncounter(state)?.id === "catalog-lock") {
+      setStacksNotice(state, "CACHE EXPIRED · CHAIN RESET", 2);
+    }
     if (state.phase === "encounter") {
       state.relayCache = null;
       spawnRelayCache(state);
@@ -298,6 +329,23 @@ export function spawnRelayCache(state: GameState) {
   const encounter = getCurrentEncounter(state);
   if (!encounter || encounter.objective !== "relay") return;
   const duration = (encounter.relayDuration ?? 7) * (state.mode === "hard" ? 0.85 : 1);
+  if (encounter.id === "catalog-lock") {
+    const index = Math.floor(state.objectiveProgress);
+    state.relayCache = {
+      ...catalogCachePosition(state, index),
+      radius: RELAY_RADIUS,
+      duration,
+      timeRemaining: duration,
+      arrivalFor: 0.45,
+    };
+    state.stacks.nextCache = index + 1 < encounter.target
+      ? catalogCachePosition(state, index + 1)
+      : null;
+    if (index === 0 && state.relayMisses === 0) {
+      setStacksNotice(state, "FOLLOW THE FLAGS · CAPTURE TO CLEAR TRAFFIC", 3);
+    }
+    return;
+  }
   const margin = 48;
   const minDistance = Math.min(state.width, state.height) * 0.35;
   const maxDistance = BASE_PLAYER_SPEED * duration * 0.78;

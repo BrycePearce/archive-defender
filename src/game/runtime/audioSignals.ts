@@ -23,6 +23,13 @@ export interface ArcadeSignals {
   powerupsCollected: number;
   endlessRound: number;
   upgradeTargetCount: number;
+  relayCaptures: number;
+  relayMisses: number;
+  stacksWave: number;
+  sweepIndex: number;
+  terminalsRecovered: number;
+  retentionCountdown: number;
+  stacksCompletionFor: number;
 }
 
 export function initialArcadeSignals(): ArcadeSignals {
@@ -48,6 +55,13 @@ export function initialArcadeSignals(): ArcadeSignals {
     powerupsCollected: 0,
     endlessRound: 0,
     upgradeTargetCount: 0,
+    relayCaptures: 0,
+    relayMisses: 0,
+    stacksWave: -1,
+    sweepIndex: 0,
+    terminalsRecovered: 0,
+    retentionCountdown: -1,
+    stacksCompletionFor: -1,
   };
 }
 
@@ -80,6 +94,18 @@ export function captureArcadeSignals(state: GameState): ArcadeSignals {
     powerupsCollected: state.powerupsCollected,
     endlessRound: state.endlessRound,
     upgradeTargetCount: state.upgradeTargets.length,
+    relayCaptures: state.phase === "encounter" && state.actIndex === 0 && state.encounterIndex === 1
+      ? state.objectiveProgress
+      : 0,
+    relayMisses: state.relayMisses,
+    stacksWave: state.stacks.wave,
+    sweepIndex: state.stacks.sweepIndex,
+    terminalsRecovered: state.stacks.terminalsRecovered,
+    retentionCountdown:
+      state.phase === "encounter" && state.actIndex === 0 && state.encounterIndex === 2
+        ? Math.ceil(state.objectiveTarget - state.objectiveProgress)
+        : -1,
+    stacksCompletionFor: state.stacks.completionFor,
   };
 }
 
@@ -89,6 +115,32 @@ export function syncArcadeAudioSignals(
   previous: ArcadeSignals,
 ) {
   const current = captureArcadeSignals(state);
+  if (previous.phase === "encounter" && state.phase === "encounter") {
+    if (state.actIndex === 0 && state.encounterIndex === 1) {
+      if (
+        current.relayCaptures > previous.relayCaptures &&
+        current.relayMisses === previous.relayMisses
+      ) {
+        audio.playSfx("cache-capture", 1 + Math.min(10, state.relayStreak) * 0.06);
+      }
+      if (current.relayMisses > previous.relayMisses) audio.playSfx("cache-expired");
+    }
+    if (current.sweepIndex > previous.sweepIndex || current.stacksWave > previous.stacksWave) {
+      audio.playSfx("warning");
+    }
+    if (current.terminalsRecovered > previous.terminalsRecovered) audio.playSfx("cache-capture");
+    if (
+      current.retentionCountdown >= 1 && current.retentionCountdown <= 10 &&
+      current.retentionCountdown !== previous.retentionCountdown
+    ) {
+      audio.playSfx("countdown");
+    }
+    if (
+      current.stacksCompletionFor > previous.stacksCompletionFor && previous.stacksCompletionFor < 0
+    ) {
+      audio.playSfx("reward");
+    }
+  }
   if (state.phase === "endless" && current.endlessRound !== previous.endlessRound) {
     audio.startFor(state.actIndex, state.phase, state.endlessRound);
   }
