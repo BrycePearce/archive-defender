@@ -215,8 +215,8 @@ export function createGameState(
     backlogFirewallGaps: [width / 2],
     backlogMazeWallIndex: 0,
     backlogMazeNextWallFor: 0,
-    backlogScanStep: 0,
-    backlogScanNextFor: 0,
+    backlogRetaliationAngle: null,
+    backlogRetaliationFor: 0,
     backlogRebuildAfterWall: false,
     banner: checkpoint ? ACTS[checkpoint.actIndex].encounters[0].name : "",
   };

@@ -5,8 +5,10 @@ import type { ArcadeSettings, GameState, Hazard } from "../types.ts";
 import { BASE_DASH_COOLDOWN } from "../engine/config.ts";
 import {
   drawBacklogBomb,
+  drawBacklogBoss,
   drawBacklogFirewallWarning,
   drawBacklogIntegrity,
+  drawBacklogRetaliationWarning,
   drawBacklogTiles,
 } from "./backlog.ts";
 import { drawEnemy } from "./entities.ts";
@@ -40,6 +42,7 @@ export function renderArcade(
   drawStacksArena(context, state, options.settings.reducedEffects);
   drawBackfillWallWarning(context, state, width, height);
   drawBacklogFirewallWarning(context, state, width, height);
+  drawBacklogRetaliationWarning(context, state, width, height, options.settings.reducedEffects);
   drawObjective(context, state, width, height);
   drawSingularity(context, state);
   drawPowerupDrops(context, state);
@@ -47,10 +50,10 @@ export function renderArcade(
   for (const hazard of state.hazards) drawHazard(context, hazard, palette.danger);
   for (const projectile of state.projectiles) drawProjectile(context, projectile);
   for (const enemy of state.enemies) {
-    const hiddenForBacklogIntermission = enemy.bossKind === "backlog" &&
-      (state.backlogHits === 2 || state.backlogHits === 3) &&
-      state.backlogIntermissionStage === 2;
-    if (hiddenForBacklogIntermission) continue;
+    if (enemy.bossKind === "backlog") {
+      drawBacklogBoss(context, state, enemy, options.settings.reducedEffects);
+      continue;
+    }
     drawEnemy(context, enemy, state.elapsed, state.activePowerups.freezeFor > 0);
   }
   drawBacklogTiles(context, state);

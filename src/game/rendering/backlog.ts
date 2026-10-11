@@ -1,5 +1,140 @@
 import { ACTS } from "../content.ts";
-import type { BacklogBomb, GameState } from "../types.ts";
+import { BACKLOG_BOSS_HITS, BACKLOG_MAZE_WALL_COUNT } from "../engine/config.ts";
+import type { BacklogBomb, Enemy, GameState } from "../types.ts";
+
+export function drawBacklogBoss(
+  context: CanvasRenderingContext2D,
+  state: GameState,
+  boss: Enemy,
+  reducedEffects: boolean,
+) {
+  const damage = Math.min(2, state.backlogHits);
+  const radius = boss.radius;
+  const hot = damage === 2;
+  const accent = hot ? "#ff7c70" : "#f8d477";
+  context.save();
+  context.translate(boss.x, boss.y);
+  context.scale(radius, radius);
+  context.lineJoin = "round";
+  context.lineCap = "round";
+
+  // The chassis survives each hit; its armor does not regenerate with the board.
+  context.fillStyle = "#182c35";
+  context.strokeStyle = "#76919c";
+  context.lineWidth = 0.045;
+  context.beginPath();
+  context.roundRect(-0.69, -0.78, 1.38, 1.56, 0.17);
+  context.fill();
+  context.stroke();
+  for (const side of [-1, 1]) {
+    context.strokeStyle = "#49616c";
+    context.lineWidth = 0.055;
+    context.beginPath();
+    context.moveTo(side * 0.43, -0.6);
+    context.lineTo(side * 0.58, -0.36);
+    context.lineTo(side * 0.46, 0.46);
+    context.lineTo(side * 0.26, 0.66);
+    context.stroke();
+  }
+
+  // Exposed lower core and drive ribs are revealed as the casing breaks away.
+  context.fillStyle = "#07101a";
+  context.beginPath();
+  context.roundRect(-0.4, 0.2, 0.8, 0.43, 0.08);
+  context.fill();
+  context.strokeStyle = accent;
+  context.lineWidth = 0.035;
+  for (let index = 0; index < 4; index++) {
+    const x = -0.25 + index * 0.165;
+    context.beginPath();
+    context.moveTo(x, 0.29);
+    context.lineTo(x, 0.52);
+    context.stroke();
+  }
+
+  for (let plate = 0; plate < 6; plate++) {
+    if ((damage >= 1 && plate === 1) || (hot && (plate === 3 || plate === 4))) continue;
+    const angle = plate * Math.PI / 3 - Math.PI / 2;
+    context.save();
+    context.rotate(angle);
+    context.fillStyle = damage ? "#67432e" : "#88552f";
+    context.strokeStyle = damage ? "#e89c62" : "#ffd09a";
+    context.lineWidth = 0.04;
+    context.beginPath();
+    context.moveTo(0.51, -0.28);
+    context.lineTo(0.79, -0.35);
+    context.lineTo(0.98, -0.14);
+    context.lineTo(0.91, 0.25);
+    context.lineTo(0.58, 0.3);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    if (damage > 0) {
+      context.strokeStyle = "#ffe0a3";
+      context.lineWidth = 0.025;
+      context.beginPath();
+      context.moveTo(0.84, -0.3);
+      context.lineTo(0.71, -0.07);
+      context.lineTo(0.83, 0.02);
+      context.lineTo(0.68, 0.26);
+      context.stroke();
+    }
+    context.restore();
+  }
+
+  // A legible face stays upright while the final damaged eye searches frantically.
+  context.fillStyle = "#07101a";
+  context.strokeStyle = accent;
+  context.lineWidth = 0.035;
+  context.beginPath();
+  context.roundRect(-0.48, -0.43, 0.96, 0.58, 0.12);
+  context.fill();
+  context.stroke();
+  const eyeShift = hot && !reducedEffects ? Math.sin(state.elapsed * 9) * 0.04 : 0;
+  context.fillStyle = accent;
+  context.fillRect(-0.32 + eyeShift, hot ? -0.33 : -0.25, 0.17, hot ? 0.2 : 0.09);
+  context.fillRect(0.15 + eyeShift, -0.25, 0.17, hot ? 0.15 : 0.09);
+  context.beginPath();
+  context.moveTo(-0.3, -0.04);
+  context.lineTo(-0.15, hot ? -0.08 : 0.01);
+  context.lineTo(0, hot ? 0.02 : 0.01);
+  context.lineTo(0.15, hot ? -0.08 : 0.01);
+  context.lineTo(0.3, -0.04);
+  context.stroke();
+
+  if (damage > 0) {
+    // Broken cables remain visible with reduced effects; only sparks animate.
+    context.strokeStyle = "#70dff2";
+    context.lineWidth = 0.035;
+    context.beginPath();
+    context.moveTo(0.59, -0.37);
+    context.lineTo(0.82, -0.48);
+    context.lineTo(0.75, -0.68);
+    if (hot) {
+      context.moveTo(-0.32, 0.62);
+      context.lineTo(-0.48, 0.82);
+      context.lineTo(-0.35, 0.94);
+    }
+    context.stroke();
+    if (!reducedEffects && Math.sin(state.elapsed * 7) > 0.65) {
+      context.strokeStyle = "#fff0bd";
+      context.beginPath();
+      context.moveTo(0.78, -0.72);
+      context.lineTo(0.82, -0.82);
+      context.moveTo(0.87, -0.63);
+      context.lineTo(0.97, -0.67);
+      context.stroke();
+    }
+  }
+  if (state.activePowerups.freezeFor > 0) {
+    context.strokeStyle = "#b9f4ff";
+    context.lineWidth = 0.045;
+    context.beginPath();
+    context.arc(0, 0, 1.08, 0, Math.PI * 2);
+    context.stroke();
+  }
+  context.restore();
+}
 
 export function drawBacklogTiles(
   context: CanvasRenderingContext2D,
@@ -216,11 +351,11 @@ export function drawBacklogIntegrity(
   context.font = "800 8px ui-monospace, monospace";
   context.textAlign = "center";
   context.fillStyle = "rgba(255, 232, 173, 0.8)";
-  context.fillText("EPISODES REMAINING", width / 2, 14);
+  context.fillText("ARCHIVE INTEGRITY", width / 2, 14);
   const pipWidth = 22;
   const gap = 5;
-  const total = pipWidth * 4 + gap * 3;
-  for (let index = 0; index < 4; index++) {
+  const total = pipWidth * BACKLOG_BOSS_HITS + gap * (BACKLOG_BOSS_HITS - 1);
+  for (let index = 0; index < BACKLOG_BOSS_HITS; index++) {
     const x = width / 2 - total / 2 + index * (pipWidth + gap);
     const cleared = index < state.backlogHits;
     context.fillStyle = cleared ? "rgba(112, 223, 242, 0.12)" : "rgba(243, 166, 90, 0.62)";
@@ -232,21 +367,54 @@ export function drawBacklogIntegrity(
   context.restore();
 }
 
+export function drawBacklogRetaliationWarning(
+  context: CanvasRenderingContext2D,
+  state: GameState,
+  width: number,
+  height: number,
+  reducedEffects: boolean,
+) {
+  if (state.backlogRetaliationAngle === null || state.backlogRetaliationFor <= 0) return;
+  const boss = state.enemies.find((enemy) => enemy.bossKind === "backlog" && enemy.health > 0);
+  if (!boss) return;
+  const angle = state.backlogRetaliationAngle;
+  const shots = state.backlogMazeWallIndex >= BACKLOG_MAZE_WALL_COUNT ? 5 : 3;
+  const reach = Math.hypot(width, height);
+  const spread = ((shots - 1) / 2) * 0.16 + 0.025;
+  context.save();
+  context.translate(boss.x, boss.y);
+  context.rotate(angle);
+  context.fillStyle = "rgba(255, 100, 124, 0.09)";
+  context.beginPath();
+  context.moveTo(0, 0);
+  context.arc(0, 0, reach, -spread, spread);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = reducedEffects
+    ? "rgba(255, 154, 169, 0.8)"
+    : `rgba(255, 154, 169, ${0.65 + Math.sin(state.elapsed * 12) * 0.15})`;
+  context.lineWidth = 1.5;
+  context.setLineDash([8, 7]);
+  for (let index = 0; index < shots; index++) {
+    const direction = (index - (shots - 1) / 2) * 0.16;
+    context.beginPath();
+    context.moveTo(Math.cos(direction) * boss.radius, Math.sin(direction) * boss.radius);
+    context.lineTo(Math.cos(direction) * reach, Math.sin(direction) * reach);
+    context.stroke();
+  }
+  context.restore();
+}
+
 export function drawBacklogFirewallWarning(
   context: CanvasRenderingContext2D,
   state: GameState,
   width: number,
   height: number,
 ) {
-  const scanWarning = state.backlogHits === 3 &&
-    state.backlogIntermissionStage === 2 &&
-    state.backlogScanStep < 6 &&
-    state.backlogScanNextFor <= 0.72;
-  if (state.backlogFirewallWarningFor <= 0 && !scanWarning) return;
+  if (state.backlogFirewallWarningFor <= 0) return;
   const pulse = 0.28 + Math.sin(state.elapsed * 20) * 0.12;
   const double = state.backlogRebuildAfterWall && state.backlogHits >= 2;
   const gapWall = state.backlogHits === 2;
-  const deepClean = state.backlogHits === 3;
   context.save();
   context.fillStyle = `rgba(243, 166, 90, ${pulse})`;
   context.strokeStyle = "#f8d477";
@@ -269,24 +437,6 @@ export function drawBacklogFirewallWarning(
       context.lineTo(right, y + 4);
       context.stroke();
     });
-  } else if (deepClean) {
-    const direction = state.backlogFirewallDirection;
-    const thickness = 20;
-    if (direction === 0 || direction === 2) {
-      const y = direction === 0 ? 0 : height - thickness;
-      context.fillRect(0, y, width, thickness);
-      context.beginPath();
-      context.moveTo(0, direction === 0 ? thickness + 2 : y - 2);
-      context.lineTo(width, direction === 0 ? thickness + 2 : y - 2);
-      context.stroke();
-    } else {
-      const x = direction === 1 ? width - thickness : 0;
-      context.fillRect(x, 0, thickness, height);
-      context.beginPath();
-      context.moveTo(direction === 1 ? x - 2 : thickness + 2, 0);
-      context.lineTo(direction === 1 ? x - 2 : thickness + 2, height);
-      context.stroke();
-    }
   } else {
     context.fillRect(0, 0, width, 20);
     context.fillRect(width - 20, 0, 20, height);
@@ -304,10 +454,6 @@ export function drawBacklogFirewallWarning(
   context.fillText(
     gapWall
       ? "FOLLOW THE GAPS - KEEP MOVING"
-      : deepClean
-      ? `DEEP CLEAN SWEEP FROM ${
-        ["TOP", "RIGHT", "BOTTOM", "LEFT"][state.backlogFirewallDirection]
-      } - TAB THROUGH`
       : double
       ? "STACKED CROSS-WIPE - TAB THROUGH"
       : "CROSS-WIPE - TAB THROUGH",

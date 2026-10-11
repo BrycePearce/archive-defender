@@ -144,7 +144,7 @@ export const ACTS: ActDefinition[] = [
       name: "Backlog Behemoth",
       kind: "backlog",
       briefing: "A decade of “watch later” has achieved sentience.",
-      health: 4,
+      health: 3,
       speed: 46,
       points: 1200,
       breakoutQuotes: {
@@ -157,13 +157,11 @@ export const ACTS: ActDefinition[] = [
         start: "I have been meaning to fight you. For eight to ten years.",
         hits: [
           "That was still in theaters!",
-          "That was the episode where it gets good!",
-          "Stop improving my completion percentage!",
+          "My backups have backups! Emergency restoration!",
         ],
         firewalls: [
           "Let's see how you like being wiped.",
-          "Good news! It was renewed for twelve seasons.",
-          "Please remain behind the paywall.",
+          "RESTORE EVERYTHING. Especially the things you deleted.",
         ],
         redBomb: [
           "This one is non-refundable.",

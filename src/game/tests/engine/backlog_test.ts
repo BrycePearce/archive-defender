@@ -16,7 +16,7 @@ Deno.test("the Backlog Behemoth organizes a wall before revealing the ruse", () 
   assert(boss);
 
   assertEquals(boss.bossKind, "backlog");
-  assertEquals(boss.maxHealth, 4);
+  assertEquals(boss.maxHealth, 3);
   assertEquals(state.backlogTiles.length, 32);
   assertEquals(state.backlogIntroStage, 1);
   assertEquals(boss.x, state.width / 2);
@@ -75,7 +75,7 @@ Deno.test("ordinary fire is absorbed by the bomb-proof backlog", () => {
   stepGame(state, idleInput, 1 / 60, () => 0.5);
 
   assertEquals(tile.health, tileHealth);
-  assertEquals(boss.health, 4);
+  assertEquals(boss.health, 3);
 });
 
 Deno.test("the Backlog Behemoth visibly lobs each bomb over its barricade", () => {
@@ -200,7 +200,7 @@ Deno.test("a missed gold bomb exits through the bottom instead of bouncing", () 
 
   assertEquals(state.backlogBombs.length, 0);
   assertEquals(state.bossDialogue?.text, "Back to the bottom of the queue.");
-  assertEquals(boss.health, 4);
+  assertEquals(boss.health, 3);
 });
 
 Deno.test("shooting a gold bomb returns it along the shot trajectory", () => {
@@ -367,7 +367,7 @@ Deno.test("a ceiling-returned gold bomb cracks a reinforced red cell from above"
 
   assertEquals(state.backlogTiles.length, originalCount);
   assertEquals(target.health, target.maxHealth - 1);
-  assertEquals(target.maxHealth, 3);
+  assertEquals(target.maxHealth, 2);
   assert(state.backlogBombs[0].vy < 0);
 });
 
@@ -521,7 +521,7 @@ Deno.test("a returned bomb through the wall lands one large boss hit", () => {
   stepGame(state, idleInput, 1 / 60, () => 0.5);
 
   assertEquals(state.backlogHits, 1);
-  assertEquals(boss.health, 3);
+  assertEquals(boss.health, 2);
   assertEquals(state.backlogIntermissionStage, 4);
   assertEquals(state.bossDialogue?.text, "That was still in theaters!");
   assertEquals(state.backlogTiles.length, 0);
@@ -609,12 +609,12 @@ Deno.test("the Behemoth grants a forgiving near-edge bomb hit", () => {
   assertEquals(state.backlogHits, 1);
 });
 
-Deno.test("the second-hit joke and twelve-season warning linger long enough to read", () => {
+Deno.test("the second hit announces emergency restoration before its attacks", () => {
   const state = backlogBossState();
   activateBacklogBoss(state);
   const boss = state.enemies[0];
   state.backlogHits = 1;
-  boss.health = 3;
+  boss.health = 2;
   state.backlogTiles = [];
   state.backlogBombs = [{
     x: boss.x,
@@ -634,14 +634,14 @@ Deno.test("the second-hit joke and twelve-season warning linger long enough to r
 
   stepGame(state, idleInput, 1 / 60, () => 0.5);
 
-  assertEquals(state.bossDialogue?.text, "That was the episode where it gets good!");
-  assertGreater(state.backlogIntermissionFor, 2.9);
+  assertEquals(state.bossDialogue?.text, "My backups have backups! Emergency restoration!");
+  assertGreater(state.backlogIntermissionFor, 1.4);
 
   state.backlogIntermissionFor = 0.001;
   stepGame(state, idleInput, 1 / 60, () => 0.5);
 
-  assertEquals(state.bossDialogue?.text, "Good news! It was renewed for twelve seasons.");
-  assertGreater(state.backlogFirewallWarningFor, 2.9);
+  assertEquals(state.bossDialogue?.text, "RESTORE EVERYTHING. Especially the things you deleted.");
+  assertGreater(state.backlogFirewallWarningFor, 1.9);
 });
 
 Deno.test("a fast returned bomb crossing the Behemoth laterally lands its hit", () => {
@@ -670,7 +670,7 @@ Deno.test("a fast returned bomb crossing the Behemoth laterally lands its hit", 
   stepGame(state, idleInput, 1 / 20, () => 0.5);
 
   assertEquals(state.backlogHits, 1);
-  assertEquals(boss.health, 3);
+  assertEquals(boss.health, 2);
 });
 
 Deno.test("a red bomb cannot be returned and damages players who ignore its fuse", () => {
@@ -732,7 +732,7 @@ Deno.test("lobbed red bombs settle as untargeted hazards instead of chasing the 
   assertEquals(state.backlogBombs[0].vy, 0);
 });
 
-Deno.test("the second Backlog wipe intervals ten reachable gaps with autoplay jokes", () => {
+Deno.test("emergency restoration escalates through eight waves before a sparse final board", () => {
   const state = backlogBossState();
   activateBacklogBoss(state);
   state.backlogHits = 2;
@@ -741,7 +741,7 @@ Deno.test("the second Backlog wipe intervals ten reachable gaps with autoplay jo
   state.backlogIntermissionFor = 0.001;
   state.backlogFirewallWarningFor = 0.001;
   state.backlogFirewallDirection = 0;
-  state.backlogFirewallGaps = [100, 400, 110, 390, 90, 410, 120, 380, 80, 420];
+  state.backlogFirewallGaps = [100, 400, 110, 390, 90, 410, 120, 380];
 
   stepGame(state, idleInput, 1 / 60, () => 0.5);
 
@@ -753,15 +753,15 @@ Deno.test("the second Backlog wipe intervals ten reachable gaps with autoplay jo
   assert(firewall.every((shot) => Math.abs(shot.x - state.backlogFirewallGaps[0]) >= 40));
   assertEquals(state.backlogMazeWallIndex, 1);
   assertEquals(state.bossDialogue, null);
-  assertEquals(state.banner, "UP NEXT: MORE BACKLOG");
-  assertGreater(state.backlogIntermissionFor, 20);
+  assert(state.banner.includes("RESTORATION"));
+  assertGreater(state.backlogIntermissionFor, 15);
   for (let wall = 1; wall < state.backlogFirewallGaps.length; wall++) {
     state.projectiles = [];
     state.backlogMazeNextWallFor = 0.001;
     stepGame(state, idleInput, 1 / 60, () => 0.5);
     assertGreater(state.projectiles.length, 20);
     const wallVelocity = state.projectiles[0].vx;
-    const redWall = wall === 3 || wall === 7;
+    const redWall = wall === 6;
     assert(
       state.projectiles.every((shot) =>
         shot.pattern === (redWall ? "backlog-firewall-red" : "backlog-firewall")
@@ -769,67 +769,165 @@ Deno.test("the second Backlog wipe intervals ten reachable gaps with autoplay jo
     );
     if (redWall) assertGreater(state.projectiles[0].warningFor ?? 0, 0.8);
     assert(state.projectiles.every((shot) => shot.vx === wallVelocity));
-    if (wall < 6) assertEquals(wallVelocity, 0);
+    if (wall < 2 || redWall) assertEquals(wallVelocity, 0);
     else {
       assertNotEquals(wallVelocity, 0);
       assertEquals(Math.sign(wallVelocity), wall % 2 === 0 ? -1 : 1);
-      assertEquals(Math.abs(wallVelocity), 42 + (wall - 6) * 10);
     }
-    const movedGap = state.backlogFirewallGaps[wall] + (redWall ? 0 : wallVelocity / 60);
-    const safeDistance = wall < 6 ? 40 : 49;
-    if (redWall) {
-      assert(state.projectiles.some((shot) => Math.abs(shot.x - movedGap) < 8));
-    } else {
-      assert(
-        state.projectiles.every((shot) => Math.abs(shot.x - movedGap) >= safeDistance),
+    if (!redWall) {
+      const positions = state.projectiles.map((shot) => shot.x).sort((a, b) => a - b);
+      const gapIndex = positions.findIndex((x, index) =>
+        index > 0 && x - positions[index - 1] > 70
       );
+      assertGreater(gapIndex, 0);
+      const gapCenter = (positions[gapIndex] + positions[gapIndex - 1]) / 2;
+      const finalCenter = gapCenter + wallVelocity * state.projectiles[0].life;
+      assert(gapCenter > 35 && gapCenter < state.width - 35);
+      assert(finalCenter > 35 && finalCenter < state.width - 35);
     }
   }
-  assertEquals(state.backlogMazeWallIndex, 10);
-  assertEquals(state.banner, "SEASON FINALE (PART 1 OF 6)");
+  assertEquals(state.backlogMazeWallIndex, 8);
+  assert(state.banner.includes("RESTORATION"));
   assertEquals(state.backlogIntermissionStage, 2);
   assertEquals(state.backlogTiles.length, 0);
 
   state.backlogIntermissionFor = 0.001;
   stepGame(state, idleInput, 1 / 60, () => 0.5);
   assertEquals(state.backlogIntermissionStage, 0);
-  assertEquals(state.backlogTiles.length, 32);
+  assert(state.backlogTiles.length > 0 && state.backlogTiles.length < 16);
 });
 
-Deno.test("the third Backlog wipe becomes a paced directional deep-clean cycle", () => {
+Deno.test("restoration fans telegraph a fixed aim and intensify for the last wave", () => {
+  for (const [wave, count] of [[2, 3], [4, 3], [7, 5]]) {
+    const state = backlogBossState();
+    activateBacklogBoss(state);
+    const boss = state.enemies[0];
+    state.backlogHits = 2;
+    state.backlogTiles = [];
+    state.backlogIntermissionStage = 2;
+    state.backlogIntermissionFor = 10;
+    state.backlogFirewallGaps = Array(8).fill(state.width / 2);
+    state.backlogMazeWallIndex = wave;
+    state.backlogMazeNextWallFor = 0.001;
+    stepGame(state, idleInput, 1 / 60, () => 0.5);
+    const lockedAngle = state.backlogRetaliationAngle;
+    assert(lockedAngle !== null);
+    assertGreater(state.backlogRetaliationFor, 0.8);
+    state.projectiles = [];
+    state.player.x = 20;
+    for (let frame = 0; frame < 12; frame++) {
+      stepGame(state, idleInput, 1 / 20, () => 0.5);
+      assertEquals(state.backlogRetaliationAngle, lockedAngle);
+      assertEquals(state.projectiles.length, 0);
+    }
+    assertNotEquals(Math.atan2(state.player.y - boss.y, state.player.x - boss.x), lockedAngle);
+    for (let frame = 0; frame < 6; frame++) stepGame(state, idleInput, 1 / 20, () => 0.5);
+    assertEquals(state.projectiles.length, count);
+    const center = state.projectiles[Math.floor(count / 2)];
+    assertAlmostEquals(Math.atan2(center.vy, center.vx), lockedAngle);
+    assertEquals(state.backlogRetaliationAngle, null);
+    assertEquals(state.backlogRetaliationFor, 0);
+    state.backlogIntermissionFor = 0.001;
+    stepGame(state, idleInput, 1 / 60, () => 0.5);
+    assertEquals(state.projectiles.length, 0);
+  }
+});
+
+Deno.test("emergency restoration lasts twenty to twenty-five seconds including transitions", () => {
+  const state = backlogBossState();
+  state.width = 960;
+  state.height = 600;
+  activateBacklogBoss(state);
+  const boss = state.enemies[0];
+  state.backlogHits = 1;
+  boss.health = 2;
+  state.backlogTiles = [];
+  state.player.invulnerableFor = 60;
+  state.backlogBombs = [{
+    x: boss.x,
+    y: boss.y,
+    previousX: boss.x,
+    previousY: boss.y,
+    vx: 0,
+    vy: 0,
+    radius: 11,
+    kind: "returnable",
+    returned: true,
+    lobFor: 0,
+    lobDuration: 0,
+    life: 4,
+    maxLife: 6,
+  }];
+  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  let duration = 0;
+  while (state.backlogIntermissionStage !== 0 && duration < 30) {
+    stepGame(state, idleInput, 1 / 20, () => 0.5);
+    duration += 1 / 20;
+  }
+  assert(duration >= 20 && duration <= 25, `Restoration lasted ${duration} seconds`);
+  assertEquals(state.backlogIntermissionStage, 0);
+  assertEquals(state.backlogMazeWallIndex, 8);
+  assertEquals(state.projectiles.length, 0);
+});
+
+Deno.test("three breakout rounds shed armor and finish after only two wipes", () => {
   const state = backlogBossState();
   activateBacklogBoss(state);
-  state.backlogHits = 3;
-  state.backlogRebuildAfterWall = true;
-  state.backlogIntermissionStage = 1;
-  state.backlogIntermissionFor = 0.001;
-
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
-
-  const firewall = state.projectiles.filter(
-    (candidate) => candidate.pattern === "backlog-firewall",
-  );
-  assertGreater(firewall.length, 20);
-  assert(firewall.every((shot) => shot.vx < 0 && shot.vy === 0));
-  assertEquals(state.backlogScanStep, 1);
-  assertEquals(state.banner, "DEEP CLEAN: 17%");
-  assertEquals(state.backlogFirewallDirection, 3);
-
-  state.backlogScanNextFor = 0.001;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
-  const rebound = state.projectiles.filter(
-    (candidate) => candidate.pattern === "backlog-firewall" && candidate.vx > 0,
-  );
-  assertGreater(rebound.length, 20);
-  assertEquals(state.backlogScanStep, 2);
-  assertEquals(state.banner, "DEEP CLEAN: 34%");
-  assertEquals(state.backlogFirewallDirection, 0);
+  const boss = state.enemies[0];
+  let previousCount = Infinity;
+  let previousDurability = Infinity;
+  let previousTargetDurability = Infinity;
+  for (let round = 0; round < 3; round++) {
+    const durability = state.backlogTiles.reduce((total, tile) => total + tile.health, 0);
+    const targetDurability = state.backlogTiles
+      .filter((tile) => tile.column === state.backlogTargetColumn)
+      .reduce((total, tile) => total + tile.health, 0);
+    assert(state.backlogTiles.length > 0 && state.backlogTiles.length < previousCount);
+    assert(durability < previousDurability);
+    assert(targetDurability > 0 && targetDurability < previousTargetDurability);
+    previousCount = state.backlogTiles.length;
+    previousDurability = durability;
+    previousTargetDurability = targetDurability;
+    state.backlogTiles = [];
+    state.backlogBombs = [{
+      x: boss.x,
+      y: boss.y,
+      previousX: boss.x,
+      previousY: boss.y,
+      vx: 0,
+      vy: 0,
+      radius: 11,
+      kind: "returnable",
+      returned: true,
+      lobFor: 0,
+      lobDuration: 0,
+      life: 4,
+      maxLife: 6,
+    }];
+    stepGame(state, idleInput, 1 / 60, () => 0.5);
+    assertEquals(state.backlogHits, round + 1);
+    if (round === 2) {
+      assertEquals(state.backlogIntermissionStage, 3);
+      assertEquals(state.backlogRebuildAfterWall, false);
+      state.backlogIntermissionFor = 0.001;
+      stepGame(state, idleInput, 1 / 60, () => 0.5);
+      assertEquals(state.phase, "actComplete");
+      assertEquals(state.backlogTiles.length, 0);
+      continue;
+    }
+    assertEquals(state.backlogIntermissionStage, 4);
+    for (const nextStage of [1, 2, 0]) {
+      state.backlogIntermissionFor = 0.001;
+      stepGame(state, idleInput, 1 / 60, () => 0.5);
+      assertEquals(state.backlogIntermissionStage, nextStage);
+    }
+  }
 });
 
 Deno.test("ordinary fire can carve a passage through Backlog firewall segments", () => {
   const state = backlogBossState();
   activateBacklogBoss(state);
-  state.backlogHits = 3;
+  state.backlogHits = 1;
   state.backlogRebuildAfterWall = true;
   state.backlogIntermissionStage = 1;
   state.backlogIntermissionFor = 0.001;
@@ -868,7 +966,7 @@ Deno.test("red Backlog walls resist gunfire and Deep Scan", () => {
   state.backlogTiles = [];
   state.backlogIntermissionStage = 2;
   state.backlogIntermissionFor = 10;
-  state.backlogMazeWallIndex = 10;
+  state.backlogMazeWallIndex = 8;
   const wallId = state.nextProjectileId++;
   state.projectiles = [
     projectile({
@@ -909,10 +1007,10 @@ Deno.test("red Backlog walls resist gunfire and Deep Scan", () => {
 Deno.test("Deep Scan carves a corridor through Backlog firewall segments", () => {
   const state = backlogBossState();
   activateBacklogBoss(state);
-  state.backlogHits = 3;
+  state.backlogHits = 2;
   state.backlogIntermissionStage = 2;
   state.backlogIntermissionFor = 10;
-  state.backlogScanStep = 6;
+  state.backlogMazeWallIndex = 8;
   const segmentId = state.nextProjectileId++;
   state.projectiles = [projectile({
     id: segmentId,
@@ -944,7 +1042,7 @@ Deno.test("Backlog walls mix durability and authored breakout rewards", () => {
   activateBacklogBoss(state);
   const redTiles = state.backlogTiles.filter((tile) => tile.column === state.backlogTargetColumn);
   assert(redTiles.length > 0);
-  assert(redTiles.every((tile) => tile.maxHealth === 3));
+  assert(redTiles.every((tile) => tile.maxHealth === 2));
   assert(state.backlogTiles.some((tile) => tile.maxHealth === 1));
   assert(state.backlogTiles.some((tile) => tile.maxHealth === 2));
   const drops = new Set<string>(
@@ -1053,11 +1151,11 @@ Deno.test("extra gold balls immediately obey normal breakout ricochet rules", ()
   assertEquals(state.backlogBombs[0].returned, false);
 });
 
-Deno.test("the fourth returned bomb pauses for the Maybe Later punchline", () => {
+Deno.test("the third returned bomb pauses for the Maybe Later punchline", () => {
   const state = backlogBossState();
   activateBacklogBoss(state);
   const boss = state.enemies[0];
-  state.backlogHits = 3;
+  state.backlogHits = 2;
   boss.health = 1;
   state.backlogTiles = [];
   state.backlogBombs = [{
@@ -1078,7 +1176,7 @@ Deno.test("the fourth returned bomb pauses for the Maybe Later punchline", () =>
 
   stepGame(state, idleInput, 1 / 60, () => 0.5);
 
-  assertEquals(state.backlogHits, 4);
+  assertEquals(state.backlogHits, 3);
   assertEquals(boss.health, 1);
   assertEquals(state.backlogIntermissionStage, 3);
   assert(state.bossDialogue?.text.includes("Maybe Later"));

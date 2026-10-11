@@ -132,8 +132,8 @@ export function beginBoss(state: GameState) {
     state.backlogFirewallGaps = [state.width / 2];
     state.backlogMazeWallIndex = 0;
     state.backlogMazeNextWallFor = 0;
-    state.backlogScanStep = 0;
-    state.backlogScanNextFor = 0;
+    state.backlogRetaliationAngle = null;
+    state.backlogRetaliationFor = 0;
     state.backlogTiles = createBacklogTiles(state, 0, true);
     const intro = definition.breakoutQuotes?.intro[0];
     if (intro) showBossDialogue(state, intro, boss.x, boss.y, 3600);
@@ -215,8 +215,8 @@ export function clearArena(
   state.backlogFirewallGaps = [state.width / 2];
   state.backlogMazeWallIndex = 0;
   state.backlogMazeNextWallFor = 0;
-  state.backlogScanStep = 0;
-  state.backlogScanNextFor = 0;
+  state.backlogRetaliationAngle = null;
+  state.backlogRetaliationFor = 0;
   state.backlogRebuildAfterWall = false;
 }
 

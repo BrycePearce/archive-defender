@@ -436,8 +436,8 @@ export interface GameState {
   backlogFirewallGaps: number[];
   backlogMazeWallIndex: number;
   backlogMazeNextWallFor: number;
-  backlogScanStep: number;
-  backlogScanNextFor: number;
+  backlogRetaliationAngle: number | null;
+  backlogRetaliationFor: number;
   backlogRebuildAfterWall: boolean;
   banner: string;
   gameOverReason?: string;
