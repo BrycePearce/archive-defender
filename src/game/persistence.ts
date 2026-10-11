@@ -8,7 +8,7 @@ import type {
   UpgradeId,
   WeaponKind,
 } from "./types.ts";
-import { UPGRADES } from "./content.ts";
+import { CAMPAIGN_ACT_COUNT, UPGRADES } from "./content.ts";
 import { ARCADE_SAVE_KEY } from "./runtime/storage.ts";
 
 export { ARCADE_SAVE_KEY };
@@ -142,7 +142,7 @@ function normalizeCheckpoint(value: unknown): ArcadeCheckpoint | null {
   const mode = value.mode === "hard" ? "hard" : value.mode === "normal" ? "normal" : null;
   const weapon = isWeapon(value.weapon) ? value.weapon : null;
   const actIndex = Math.floor(finiteNumber(value.actIndex, -1));
-  if (!mode || !weapon || actIndex < 0 || actIndex > 2) return null;
+  if (!mode || !weapon || actIndex < 0 || actIndex >= CAMPAIGN_ACT_COUNT) return null;
 
   const validUpgradeIds = new Set(UPGRADES.map((upgrade) => upgrade.id));
   const upgrades: Partial<Record<UpgradeId, number>> = {};

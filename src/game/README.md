@@ -2,6 +2,11 @@
 
 The game is organized around a pure, mutable simulation state with React acting as the host.
 
+The main story follows First Sweep → Catalog Lock → Backfill Daemon → Retention Window → Backlog
+Behemoth → victory. `CAMPAIGN_ACT_COUNT` limits story progression to Stale Stacks. The remaining
+`ACTS` content is retained for local testing and future bonus content; it is not part of the
+campaign. Endless maintenance is an optional postgame mode.
+
 ## Runtime boundaries
 
 - `engine.ts` is the stable public facade and frame orchestrator. Keep exported API compatibility

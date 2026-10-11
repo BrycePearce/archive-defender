@@ -1,12 +1,13 @@
 import { assertEquals, assertGreaterOrEqual } from "@std/assert";
-import { ACTS, DIFFICULTIES, UPGRADES, WEAPONS } from "./content.ts";
+import { ACTS, CAMPAIGN_ACT_COUNT, DIFFICULTIES, UPGRADES, WEAPONS } from "./content.ts";
 
-Deno.test("arcade ships three complete authored acts", () => {
+Deno.test("the story ends at Stale Stacks and retains later content for local testing", () => {
+  assertEquals(CAMPAIGN_ACT_COUNT, 1);
   assertEquals(ACTS.length, 3);
   assertEquals(ACTS.map((act) => act.encounters.length), [3, 3, 3]);
   assertEquals(new Set(ACTS.map((act) => act.boss.kind)).size, 3);
   assertEquals(ACTS[0].miniboss?.kind, "backfill-daemon");
-  assertEquals(ACTS[0].miniboss?.afterEncounterIndex, 2);
+  assertEquals(ACTS[0].miniboss?.afterEncounterIndex, 1);
   assertEquals(ACTS[0].miniboss?.health, 175);
   assertEquals(ACTS[0].boss.health, 4);
   assertEquals(ACTS[0].boss.breakoutQuotes?.hits.length, 3);

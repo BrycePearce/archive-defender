@@ -5,9 +5,9 @@ import { beginEncounter, beginMiniboss } from "../../engine/systems/progression.
 import type { ArcadeInput } from "../../types.ts";
 import { activeState, idleInput, projectile } from "./support.ts";
 
-Deno.test("Act 1 Job 3 ends with the talking Backfill Daemon", () => {
+Deno.test("Act 1 Job 2 ends with the talking Backfill Daemon", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginEncounter(state);
   state.objectiveProgress = state.objectiveTarget;
   for (let frame = 0; frame < 90; frame++) stepGame(state, idleInput, 1 / 60);
@@ -21,7 +21,7 @@ Deno.test("Act 1 Job 3 ends with the talking Backfill Daemon", () => {
 
 Deno.test("Backfill Daemon stages NEVER, the opening wall, and its music-start beat", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
   const miniboss = state.enemies[0];
 
@@ -86,7 +86,7 @@ Deno.test("Backfill Daemon stages NEVER, the opening wall, and its music-start b
 
 Deno.test("Mandatory Backfill warns from a safe edge before joining the active fight", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
   const miniboss = state.enemies[0];
   state.minibossIntroStage = 8;
@@ -114,7 +114,7 @@ Deno.test("Mandatory Backfill warns from a safe edge before joining the active f
 
 Deno.test("Backfill Daemon quotes its phases once while combat continues", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
   const miniboss = state.enemies[0];
   state.minibossIntroStage = 8;
@@ -136,7 +136,7 @@ Deno.test("Backfill Daemon quotes its phases once while combat continues", () =>
 
 Deno.test("Backfill Daemon telegraphs a patterned ring with a path toward the player", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
   const miniboss = state.enemies[0];
   state.minibossIntroStage = 8;
@@ -172,7 +172,7 @@ Deno.test("Backfill Daemon telegraphs a patterned ring with a path toward the pl
 
 Deno.test("Backfill Daemon announces summons and never keeps more than three adds", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
   const miniboss = state.enemies[0];
   state.minibossIntroStage = 8;
@@ -197,9 +197,9 @@ Deno.test("Backfill Daemon announces summons and never keeps more than three add
   );
 });
 
-Deno.test("Backfill Daemon defeat grants one heart, fully heals, and offers the final job reward", () => {
+Deno.test("Backfill Daemon defeat grants one heart, fully heals, and offers a reward before Retention Window", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
   const miniboss = state.enemies[0];
   state.minibossIntroStage = 8;
@@ -228,14 +228,14 @@ Deno.test("Backfill Daemon defeat grants one heart, fully heals, and offers the 
   assertEquals(state.phase, "reward");
   assertEquals(state.offeredUpgrades.length, 3);
   dispatchGameAction(state, { type: "chooseUpgrade", upgradeId: state.offeredUpgrades[0] });
-  assertEquals(state.phase, "boss");
+  assertEquals(state.phase, "encounter");
   assertEquals(state.encounterIndex, 2);
   assertEquals(state.player.maxHealth, previousMaxHealth + 1);
 });
 
 Deno.test("Backfill Daemon defeat clears an active wall warning", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
   const miniboss = state.enemies[0];
   state.minibossIntroStage = 8;
@@ -259,7 +259,7 @@ Deno.test("Backfill Daemon defeat clears an active wall warning", () => {
 
 Deno.test("uncollected enemy powerups survive the miniboss defeat and reward screen", () => {
   const state = activeState();
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
   const miniboss = state.enemies[0];
   state.minibossIntroStage = 8;
@@ -294,7 +294,7 @@ Deno.test("uncollected enemy powerups survive the miniboss defeat and reward scr
 
 Deno.test("hard mode scales Backfill Daemon health", () => {
   const state = activeState(7, "hard");
-  state.encounterIndex = 2;
+  state.encounterIndex = 1;
   beginMiniboss(state);
 
   assertEquals(state.phase, "miniboss");

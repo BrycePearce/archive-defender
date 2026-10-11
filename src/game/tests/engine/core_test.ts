@@ -2,6 +2,20 @@ import { assertEquals, assertGreater } from "@std/assert";
 import { createGameState, dispatchGameAction, jumpToTestLevel, stepGame } from "../../engine.ts";
 
 import { activeState, enemy, idleInput, projectile } from "./support.ts";
+import { completeBoss } from "../../engine/systems/progression.ts";
+
+Deno.test("clearing Backlog Behemoth completes the story without entering later acts", () => {
+  const state = activeState();
+  jumpToTestLevel(state, { actIndex: 0, kind: "boss" });
+  completeBoss(state);
+  assertEquals(state.phase, "actComplete");
+  dispatchGameAction(state, { type: "continueAct" });
+  assertEquals(state.phase, "victory");
+  assertEquals(state.actIndex, 0);
+  assertEquals(state.enemies.length, 0);
+  dispatchGameAction(state, { type: "continueAct" });
+  assertEquals(state.phase, "victory");
+});
 
 Deno.test("local test level jumps initialize encounters, minibosses, and bosses", () => {
   const state = createGameState(500, 300);

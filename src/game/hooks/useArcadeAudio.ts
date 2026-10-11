@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import type { RefObject } from "react";
-import { ACTS } from "../content.ts";
+import { ACTS, CAMPAIGN_ACT_COUNT } from "../content.ts";
 import type { ArcadeAudio } from "../audio.ts";
 import { checkpointFromState, recordScore } from "../persistence.ts";
 import type { ArcadeSaveV2, ArcadeSettings, GamePhase, GameState } from "../types.ts";
@@ -63,12 +63,14 @@ export function useArcadeAudio({
             draft.achievements.push("Backlog cleared");
           }
         }
-        if (state.actIndex < ACTS.length - 1) {
+        if (state.actIndex < CAMPAIGN_ACT_COUNT - 1) {
           draft.checkpoint = {
             ...checkpointFromState(state),
             actIndex: state.actIndex + 1,
             health: Math.min(state.player.maxHealth, state.player.health + 1),
           };
+        } else {
+          draft.checkpoint = null;
         }
       });
     } else if (state.phase === "gameOver") {

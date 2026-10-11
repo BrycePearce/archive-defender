@@ -86,3 +86,28 @@ Deno.test("arcade persistence tolerates blocked storage", () => {
   assertEquals(readArcadeSave({ storage: blocked }), createDefaultSave());
   writeArcadeSave(createDefaultSave(), { storage: blocked });
 });
+
+Deno.test("legacy later-act checkpoints are retired without losing scores or unlocks", () => {
+  for (const actIndex of [0, 1, 2]) {
+    const storage = new MemoryStorage();
+    const save = createDefaultSave();
+    save.bestScores.normal = 4321;
+    save.unlocks.rail = true;
+    save.checkpoint = {
+      seed: 1,
+      mode: "normal",
+      actIndex,
+      weapon: "rail",
+      score: 4321,
+      upgrades: {},
+      maxHealth: 4,
+      health: 4,
+      shield: 0,
+    };
+    storage.setItem(ARCADE_SAVE_KEY, JSON.stringify(save));
+    const restored = readArcadeSave({ storage });
+    assertEquals(restored.checkpoint, actIndex === 0 ? save.checkpoint : null);
+    assertEquals(restored.bestScores.normal, 4321);
+    assertEquals(restored.unlocks.rail, true);
+  }
+});

@@ -119,6 +119,7 @@ export function ResultScreen({
   copy,
   score,
   primary,
+  secondary = "Main menu",
   onPrimary,
   onSecondary,
 }: {
@@ -128,6 +129,7 @@ export function ResultScreen({
   copy: string;
   score: number;
   primary: string;
+  secondary?: string;
   onPrimary: () => void;
   onSecondary?: () => void;
 }) {
@@ -144,7 +146,7 @@ export function ResultScreen({
       <div className="arcade-card-actions">
         {onSecondary && (
           <button type="button" className="arcade-button arcade-button-ghost" onClick={onSecondary}>
-            Main menu
+            {secondary}
           </button>
         )}
         <button type="button" className="arcade-button arcade-button-primary" onClick={onPrimary}>

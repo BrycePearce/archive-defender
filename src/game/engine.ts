@@ -1,4 +1,4 @@
-import { ACTS, DIFFICULTIES } from "./content.ts";
+import { ACTS, CAMPAIGN_ACT_COUNT, DIFFICULTIES } from "./content.ts";
 import {
   backlogTargetCenter,
   resolveBacklogBombBossCollisions,
@@ -291,7 +291,7 @@ export function dispatchGameAction(state: GameState, action: GameAction) {
       break;
     case "continueAct":
       if (state.phase !== "actComplete") return;
-      if (state.actIndex >= ACTS.length - 1) {
+      if (state.actIndex >= CAMPAIGN_ACT_COUNT - 1) {
         state.phase = "victory";
         state.banner = "Library secured";
       } else {

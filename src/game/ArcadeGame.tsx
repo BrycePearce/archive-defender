@@ -13,7 +13,7 @@ import {
   VolumeX,
   Zap,
 } from "lucide-react";
-import { ACTS, DIFFICULTIES, WEAPONS } from "./content.ts";
+import { ACTS, CAMPAIGN_ACT_COUNT, DIFFICULTIES, WEAPONS } from "./content.ts";
 import { PauseScreen, ResultScreen, TitleScreen } from "./components/OverlayScreens.tsx";
 import { createGameState, getCurrentEncounter } from "./engine.ts";
 import { useArcadeController } from "./hooks/useArcadeController.ts";
@@ -89,14 +89,14 @@ export function ArcadeGame({
       );
     }
     if (summary.phase === "actComplete") {
-      const isFinal = summary.actIndex === ACTS.length - 1;
+      const isFinal = summary.actIndex >= CAMPAIGN_ACT_COUNT - 1;
       return (
         <ResultScreen
           icon={<Check />}
           eyebrow="Act secured"
           title={summary.banner}
           copy={isFinal
-            ? "Every library is clean. One final report remains."
+            ? "The Backlog Behemoth is defeated. The stacks are quiet at last."
             : `${ACTS[summary.actIndex + 1].name} is now cleared for entry.`}
           score={summary.score}
           primary={isFinal ? "Complete archive" : "Enter next act"}
@@ -125,11 +125,12 @@ export function ArcadeGame({
           icon={<Trophy />}
           eyebrow={`${DIFFICULTIES[summary.mode].label} complete`}
           title="Library secured"
-          copy="The Quarantine Array, Hard mode, and endless maintenance are now available."
+          copy="The backlog is cleared. Your cleanup story is complete. The Quarantine Array and Hard mode are unlocked, with optional endless maintenance available below."
           score={summary.score}
-          primary="Start endless mode"
-          onPrimary={startEndless}
-          onSecondary={returnToTitle}
+          primary="Main menu"
+          onPrimary={returnToTitle}
+          secondary="Bonus: endless maintenance"
+          onSecondary={startEndless}
         />
       );
     }
@@ -173,7 +174,9 @@ export function ArcadeGame({
                 {ACTS.map((candidateAct, actIndex) => (
                   <optgroup
                     key={candidateAct.id}
-                    label={`Act ${actIndex + 1} — ${candidateAct.name}`}
+                    label={`${
+                      actIndex < CAMPAIGN_ACT_COUNT ? "Story" : "Unused"
+                    } — ${candidateAct.name}`}
                   >
                     {TEST_LEVELS.filter((level) => level.actIndex === actIndex).map((level) => (
                       <option key={level.id} value={level.id}>{level.label}</option>

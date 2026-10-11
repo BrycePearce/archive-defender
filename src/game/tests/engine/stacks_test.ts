@@ -80,7 +80,7 @@ Deno.test("catalog routes fit small and large arenas and remain reachable within
   }
 });
 
-Deno.test("catalog completion rewards once and continues to survival before the miniboss", () => {
+Deno.test("catalog completion enters the miniboss after its finish beat", () => {
   const state = encounter(1);
   state.objectiveProgress = 9;
   state.player.x = state.relayCache!.x;
@@ -92,12 +92,9 @@ Deno.test("catalog completion rewards once and continues to survival before the 
   updateObjective(state, 0.5);
   assertEquals(state.score, score);
   updateObjective(state, 1);
-  assertEquals(state.phase, "reward");
-  dispatchGameAction(state, { type: "chooseUpgrade", upgradeId: state.offeredUpgrades[0] });
-  assertEquals(state.phase, "encounter");
-  assertEquals(state.encounterIndex, 2);
-  assertEquals(state.objectiveTarget, 65);
-  assertEquals(state.stacks.completionFor, -1);
+  assertEquals(state.phase, "miniboss");
+  assertEquals(state.encounterIndex, 1);
+  assertEquals(state.enemies[0].bossKind, "backfill-daemon");
 });
 
 Deno.test("optional terminals need a sustained hold, save four seconds, and award once", () => {
@@ -205,15 +202,17 @@ Deno.test("later acts retain their original relay and survival mechanics", () =>
   assertEquals(state.stacks.terminal, null);
 });
 
-Deno.test("retention completion clears threats and enters the miniboss after its finish beat", () => {
+Deno.test("retention completion rewards the player before the final boss", () => {
   const state = encounter(2);
   state.objectiveProgress = 65;
   stepGame(state, idleInput, 1 / 60);
   assertEquals(state.enemies.length, 0);
   assertEquals(state.stacks.notice, "RETENTION PURGE COMPLETE");
   for (let frame = 0; frame < 90; frame++) stepGame(state, idleInput, 1 / 60);
-  assertEquals(state.phase, "miniboss");
-  assertEquals(state.enemies[0].bossKind, "backfill-daemon");
+  assertEquals(state.phase, "reward");
+  dispatchGameAction(state, { type: "chooseUpgrade", upgradeId: state.offeredUpgrades[0] });
+  assertEquals(state.phase, "boss");
+  assertEquals(state.enemies[0].bossKind, "backlog");
 });
 
 Deno.test("catalog sound cues distinguish captures from expiry and rise with the chain", () => {

@@ -38,6 +38,9 @@ function beats(
   ];
 }
 
+// Later acts remain available for local testing and future bonus content.
+export const CAMPAIGN_ACT_COUNT = 1;
+
 export const ACTS: ActDefinition[] = [
   {
     id: "stale-stacks",
@@ -120,7 +123,7 @@ export const ACTS: ActDefinition[] = [
       health: 175,
       speed: 52,
       points: 850,
-      afterEncounterIndex: 2,
+      afterEncounterIndex: 1,
       quotes: {
         intro: "Archiving 47 identical remuxes. Estimated completion time",
         introNever: "NEVER!",
