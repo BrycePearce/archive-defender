@@ -276,3 +276,28 @@ Deno.test("a lethal sweep cannot be overwritten by objective completion", () => 
   assertEquals(state.phase, "gameOver");
   assertEquals(state.player.health, 0);
 });
+
+Deno.test("retention sweeps cross at 780 units per second without tunneling through players", () => {
+  for (const vertical of [false, true]) {
+    const state = encounter(2);
+    state.player.invulnerableFor = 0;
+    state.player.x = 250;
+    state.player.y = 250;
+    state.stacks.sweep = { vertical, position: 200, gap: 50, warningFor: 0 };
+    const health = state.player.health;
+    updateStacksEncounter(state, 0.1);
+    assertEquals(state.stacks.sweep?.position, 278);
+    assertEquals(state.player.health, health - 1);
+  }
+});
+
+Deno.test("fast retention sweeps still allow dodging through the red wall", () => {
+  const state = encounter(2);
+  state.player.x = 250;
+  state.player.y = 250;
+  state.player.invulnerableFor = 0.2;
+  state.stacks.sweep = { vertical: false, position: 200, gap: 50, warningFor: 0 };
+  const health = state.player.health;
+  updateStacksEncounter(state, 0.1);
+  assertEquals(state.player.health, health);
+});

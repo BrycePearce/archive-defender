@@ -389,6 +389,7 @@ export function useArcadeController({
         encounterIndex: level.encounterIndex,
       }
       : { actIndex: level.actIndex, kind: level.kind };
+    canvasRef.current?.focus({ preventScroll: true });
     jumpToTestLevel(
       state,
       target,

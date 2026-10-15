@@ -127,14 +127,14 @@ export const ACTS: ActDefinition[] = [
       quotes: {
         intro: "Archiving 47 identical remuxes. Estimated completion time",
         introNever: "NEVER!",
-        introReaction: "Oh. Not enough files. That's fixable.",
+        introReaction: "You can dodge the backlog. You can't stop the backups.",
         phaseTwo: "Free space is just storage I haven't filled yet.",
         phaseThree: "Delete nothing! You might watch it someday!",
         summon: [
           "Good news! I found a few more copies.",
           "Restoring from backup. And the backup's backup.",
         ],
-        wallAttack: "MANDATORY BACKFILL!",
+        wallAttack: "MANDATORY BACKFILL! Covering fire!",
         defeat: "Fine... but keep the director's cut?",
       },
     },

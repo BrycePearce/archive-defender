@@ -8,6 +8,7 @@ import { getCurrentEncounter } from "../selectors.ts";
 
 export const CAPTURE_PULSE_RADIUS = 140;
 export const SWEEP_GAP_WIDTH = 160;
+export const RETENTION_SWEEP_SPEED = 780;
 const CACHE_ROUTE = [
   [0.65, 0.6],
   [0.72, 0.3],
@@ -171,7 +172,7 @@ export function updateStacksEncounter(state: GameState, dt: number) {
     } else {
       const length = sweep.vertical ? state.width : state.height;
       const before = sweep.position;
-      sweep.position += (length + 32) / 4.5 * dt;
+      sweep.position += RETENTION_SWEEP_SPEED * dt;
       const along = sweep.vertical ? state.player.x : state.player.y;
       const across = sweep.vertical ? state.player.y : state.player.x;
       if (

@@ -319,6 +319,11 @@
   touch-action: none;
 }
 
+/* Gameplay keys should not reveal a browser focus ring around the arena. */
+.arcade-canvas:focus {
+  outline: none;
+}
+
 .arcade-mission-chip {
   position: absolute;
   z-index: 2;

@@ -1185,3 +1185,13 @@ Deno.test("the third returned bomb pauses for the Maybe Later punchline", () => 
   stepGame(state, idleInput, 1 / 60, () => 0.5);
   assertEquals(state.phase, "actComplete");
 });
+
+Deno.test("Space advances boss dialogue independently of held primary fire", () => {
+  const state = backlogBossState();
+  stepGame(state, { ...idleInput, firing: true }, 1 / 60);
+  const stage = state.backlogIntroStage;
+  stepGame(state, { ...idleInput, firing: true, secondary: true }, 1 / 60);
+  assertEquals(state.backlogIntroStage, stage + 1);
+  stepGame(state, { ...idleInput, firing: true, secondary: true }, 1 / 60);
+  assertEquals(state.backlogIntroStage, stage + 1);
+});

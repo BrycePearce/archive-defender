@@ -2,7 +2,7 @@ import { assert, assertEquals, assertGreater } from "@std/assert";
 import { dispatchGameAction, stepGame } from "../../engine.ts";
 
 import { beginEncounter, beginMiniboss } from "../../engine/systems/progression.ts";
-import type { ArcadeInput } from "../../types.ts";
+import { damageEnemy } from "../../engine/damage.ts";
 import { activeState, idleInput, projectile } from "./support.ts";
 
 Deno.test("Act 1 Job 2 ends with the talking Backfill Daemon", () => {
@@ -19,69 +19,86 @@ Deno.test("Act 1 Job 2 ends with the talking Backfill Daemon", () => {
   assert(state.bossDialogue?.text.includes("47 identical remuxes"));
 });
 
-Deno.test("Backfill Daemon stages NEVER, the opening wall, and its music-start beat", () => {
+Deno.test("Backfill dialogue waits for fresh presses and preserves powerups", () => {
   const state = activeState();
-  state.encounterIndex = 1;
   beginMiniboss(state);
-  const miniboss = state.enemies[0];
-
+  state.activePowerups.prism = 10;
+  for (let i = 0; i < 600; i++) stepGame(state, idleInput, 1 / 60);
   assertEquals(state.minibossIntroStage, 1);
-  assert(miniboss.y >= miniboss.radius);
-  assertEquals(state.bossDialogue?.revealRate, 17);
-
-  const healthBeforeInput = miniboss.health;
-  const activeInput: ArcadeInput = {
-    ...idleInput,
-    movement: { x: 1, y: 0 },
-    aim: { x: miniboss.x, y: miniboss.y },
-    firing: true,
-  };
-  for (let frame = 0; frame < 60; frame++) {
-    stepGame(state, activeInput, 1 / 60, () => 0.5);
-  }
-  assertEquals(state.minibossIntroStage, 1);
-  assertEquals(state.minibossFightStarts, 0);
-  assertEquals(miniboss.health, healthBeforeInput);
-
-  state.minibossIntroFor = 0;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
-  assertEquals(state.minibossIntroStage, 2);
-  assert(state.bossDialogue?.text.endsWith("."));
-  assertEquals(state.bossImpactCues, 0);
-
-  state.minibossIntroFor = 0;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
-  assertEquals(state.minibossIntroStage, 3);
-  assert(state.bossDialogue?.text.endsWith(".."));
-
-  state.minibossIntroFor = 0;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
-  assertEquals(state.minibossIntroStage, 4);
-  assert(state.bossDialogue?.text.endsWith("..."));
-
-  state.minibossIntroFor = 0;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  assertEquals(state.activePowerups.prism, 10);
+  const press = { ...idleInput, firing: true };
+  for (let i = 0; i < 360; i++) stepGame(state, press, 1 / 60);
   assertEquals(state.minibossIntroStage, 5);
   assertEquals(state.bossDialogue?.text, "NEVER!");
-  assertEquals(state.bossDialogue?.tone, "danger");
-  assertEquals(state.bossImpactCues, 1);
-
-  state.minibossIntroFor = 0;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  assertEquals(state.player.ammo, state.player.magazineSize);
+  stepGame(state, idleInput, 1 / 60);
+  state.player.dashCooldown = 2;
+  stepGame(state, press, 1 / 60);
+  assertEquals(state.minibossIntroStage, 5);
+  for (let i = 0; i < 180 && state.minibossIntroStage === 5; i++) {
+    stepGame(state, idleInput, 1 / 60);
+  }
   assertEquals(state.minibossIntroStage, 6);
-  const openingWall = state.projectiles.filter((shot) => shot.pattern === "backfill-wall");
-  assertGreater(openingWall.length, 25);
-  assert(openingWall.every((shot) => shot.vy > 0 && shot.vx === 0));
-
-  state.minibossIntroFor = 0;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
+  assertEquals(state.player.dashCooldown, 0);
+  assert(state.projectiles.some((shot) => shot.pattern === "backfill-wall" && shot.vy === 220));
+  state.player.health = 1;
+  for (let i = 0; i < 600 && state.minibossIntroStage === 6; i++) {
+    stepGame(state, idleInput, 1 / 60);
+  }
   assertEquals(state.minibossIntroStage, 7);
-  assertEquals(state.bossDialogue?.text, "Oh. Not enough files. That's fixable.");
-
-  state.minibossIntroFor = 0;
-  stepGame(state, idleInput, 1 / 60, () => 0.5);
-  assertEquals(state.minibossIntroStage, 8);
+  assertEquals(state.player.health, 1);
+  assertEquals(state.minibossFightStarts, 0);
+  assertGreater(state.projectiles.length, 0);
+  stepGame(state, press, 1 / 60);
+  assertEquals(state.minibossFightStarts, 0);
+  for (let i = 0; i < 120; i++) stepGame(state, idleInput, 1 / 60);
+  assertEquals(state.minibossFightStarts, 0);
+  for (let i = 0; i < 120; i++) stepGame(state, idleInput, 1 / 60);
   assertEquals(state.minibossFightStarts, 1);
+  assertEquals(state.minibossIntroStage, 8);
+});
+
+Deno.test("opening wall resolves after a dodge crosses it", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  state.minibossIntroStage = 5;
+  state.backfillDialogueAdvanceHeld = false;
+  state.bossDialogue = null;
+  stepGame(state, { ...idleInput, firing: true }, 1 / 60);
+  for (const shot of state.projectiles) {
+    shot.y = state.player.y - 60;
+    shot.previousY = shot.y;
+  }
+  for (let i = 0; i < 12; i++) {
+    stepGame(state, { ...idleInput, dash: true, movement: { x: 0, y: -1 } }, 1 / 60);
+  }
+  assertEquals(state.minibossIntroStage, 7);
+  assertEquals(state.player.health, state.player.maxHealth);
+  assertGreater(state.projectiles.filter((shot) => shot.pattern === "backfill-wall").length, 0);
+});
+
+Deno.test("burst damage preserves exactly one combat wall then allows a quick kill", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  state.minibossIntroStage = 8;
+  const boss = state.enemies[0];
+  damageEnemy(state, boss, 1000);
+  assertEquals(boss.health, boss.maxHealth * 0.66);
+  assert(state.backfillShielded);
+  damageEnemy(state, boss, 1000);
+  assertEquals(boss.health, boss.maxHealth * 0.66);
+  stepGame(state, idleInput, 1 / 60);
+  assertGreater(state.backfillWallWarningFor, 0);
+  state.backfillWallWarningFor = 0.001;
+  stepGame(state, idleInput, 1 / 60);
+  assert(state.backfillWallActive);
+  assert(state.projectiles.every((shot) => shot.pattern === "backfill-wall"));
+  state.player.invulnerableFor = 100;
+  for (let i = 0; i < 600 && state.backfillWallActive; i++) stepGame(state, idleInput, 1 / 60);
+  assert(state.backfillWallCompleted);
+  assertEquals(state.backfillShielded, false);
+  damageEnemy(state, boss, 1000);
+  assert(boss.health <= 0);
 });
 
 Deno.test("Mandatory Backfill warns from a safe edge before joining the active fight", () => {
@@ -101,7 +118,7 @@ Deno.test("Mandatory Backfill warns from a safe edge before joining the active f
 
   assertGreater(state.backfillWallWarningFor, 0);
   assertEquals(state.backfillWallDirection, 2);
-  assertEquals(state.bossDialogue?.text, "MANDATORY BACKFILL!");
+  assertEquals(state.bossDialogue?.text, "MANDATORY BACKFILL! Covering fire!");
   assertEquals(state.bossDialogue?.tone, "danger");
   assertEquals(state.projectiles.length, 0);
 
@@ -145,7 +162,7 @@ Deno.test("Backfill Daemon telegraphs a patterned ring with a path toward the pl
   stepGame(state, idleInput, 1 / 60, () => 0.5);
   state.projectiles = [];
 
-  miniboss.bossAttackStep = 1;
+  miniboss.bossAttackStep = 3;
   miniboss.bossAttackPending = undefined;
   miniboss.behaviorCooldown = 0;
   stepGame(state, idleInput, 1 / 60, () => 0.5);
@@ -182,6 +199,7 @@ Deno.test("Backfill Daemon announces summons and never keeps more than three add
   state.projectiles = [];
 
   for (let summon = 0; summon < 3; summon++) {
+    state.backfillWallCooldown = 999;
     miniboss.bossAttackStep = 2;
     miniboss.bossAttackPending = undefined;
     miniboss.behaviorCooldown = 0;
@@ -299,4 +317,195 @@ Deno.test("hard mode scales Backfill Daemon health", () => {
 
   assertEquals(state.phase, "miniboss");
   assertEquals(state.enemies[0].maxHealth, 207);
+});
+
+Deno.test("combat backfill preserves threats and provides covering fire", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  state.minibossIntroStage = 8;
+  state.player.invulnerableFor = 100;
+  const boss = state.enemies[0];
+  for (let i = 0; i < 600 && state.backfillWallWarningFor === 0; i++) {
+    stepGame(state, idleInput, 1 / 60);
+  }
+  assertGreater(state.backfillWallWarningFor, 0);
+  assertEquals(boss.bossAttackStep, 3);
+  assertGreater(state.projectiles.filter((shot) => !shot.friendly).length, 0);
+  state.backfillWallWarningFor = 0.001;
+  stepGame(state, idleInput, 1 / 60);
+  for (let i = 0; i < 30; i++) stepGame(state, idleInput, 1 / 60);
+  assert(state.backfillWallActive);
+  assertEquals(boss.bossAttackStep, 3);
+  for (let i = 0; i < 42; i++) stepGame(state, idleInput, 1 / 60);
+  assert(state.projectiles.some((shot) => !shot.friendly && shot.pattern !== "backfill-wall"));
+  for (let i = 0; i < 600 && state.backfillWallActive; i++) stepGame(state, idleInput, 1 / 60);
+  assert(state.backfillWallCompleted);
+  assertGreater(boss.behaviorCooldown, 0.8);
+});
+
+Deno.test("typing and punchline animations cannot be skipped or queue an advance", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  stepGame(state, idleInput, 1 / 60);
+  for (let i = 0; i < 60; i++) stepGame(state, { ...idleInput, secondary: i % 2 === 0 }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 1);
+  assertEquals(state.bossDialogue?.revealRate, 17);
+  for (let i = 0; i < 300; i++) stepGame(state, { ...idleInput, secondary: true }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 1);
+  stepGame(state, idleInput, 1 / 60);
+  stepGame(state, { ...idleInput, secondary: true }, 1 / 60);
+  for (let i = 0; i < 360; i++) stepGame(state, { ...idleInput, secondary: true }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 5);
+});
+
+Deno.test("new attacks announce themselves and fire a delayed second volley", () => {
+  for (const attackStep of [0, 2]) {
+    const state = activeState();
+    beginMiniboss(state);
+    state.minibossIntroStage = 8;
+    state.player.invulnerableFor = 100;
+    const boss = state.enemies[0];
+    boss.bossAttackStep = attackStep;
+    boss.behaviorCooldown = 0;
+    stepGame(state, idleInput, 1 / 60);
+    assert(
+      state.bossDialogue?.text.startsWith(attackStep === 0 ? "DOUBLE STAMP" : "ROTATING BACKUP"),
+    );
+    assertEquals(state.projectiles.length, 0);
+    boss.behaviorCooldown = 0;
+    stepGame(state, idleInput, 1 / 60);
+    const firstVolleyIds = state.projectiles.map((shot) => shot.id);
+    assertGreater(firstVolleyIds.length, 0);
+    for (let i = 0; i < 42; i++) stepGame(state, idleInput, 1 / 60);
+    assertEquals(state.backfillFollowupAttack, null);
+    assert(state.projectiles.some((shot) => !firstVolleyIds.includes(shot.id)));
+  }
+});
+
+Deno.test("completion-time animation keeps the full sentence readable and ignores presses", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  for (let i = 0; i < 300; i++) stepGame(state, idleInput, 1 / 60);
+  stepGame(state, { ...idleInput, secondary: true }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 2);
+  assertEquals(state.bossDialogue?.revealRate, undefined);
+  assert(state.bossDialogue?.text.includes("Estimated completion time."));
+  for (let i = 0; i < 55; i++) stepGame(state, { ...idleInput, secondary: i % 2 === 0 }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 2);
+  for (let i = 0; i < 120; i++) stepGame(state, { ...idleInput, secondary: i % 2 === 0 }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 4);
+  assert(state.bossDialogue?.text.endsWith("..."));
+});
+
+Deno.test("backfill never deletes summoned enemies or their existing projectiles", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  state.minibossIntroStage = 8;
+  state.player.invulnerableFor = 100;
+  const boss = state.enemies[0];
+  boss.health = boss.maxHealth * 0.5;
+  stepGame(state, idleInput, 1 / 60);
+  boss.bossAttackStep = 2;
+  boss.behaviorCooldown = 0;
+  stepGame(state, idleInput, 1 / 60);
+  boss.behaviorCooldown = 0;
+  stepGame(state, idleInput, 1 / 60);
+  const adds = state.enemies.filter((enemy) => enemy.kind !== "boss");
+  assertEquals(adds.length, 2);
+  const shot = projectile({
+    friendly: false,
+    x: 100,
+    y: 100,
+    previousX: 100,
+    previousY: 100,
+    vx: 0,
+    vy: 0,
+    life: 10,
+  });
+  state.projectiles.push(shot);
+  state.backfillWallCooldown = 0;
+  stepGame(state, idleInput, 1 / 60);
+  assert(adds.every((add) => state.enemies.includes(add)));
+  assert(state.projectiles.includes(shot));
+  state.backfillWallWarningFor = 0.001;
+  stepGame(state, idleInput, 1 / 60);
+  assert(adds.every((add) => state.enemies.includes(add)));
+  assert(state.projectiles.includes(shot));
+});
+
+Deno.test("the player can move and dodge during the automatic post-wall reaction", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  state.minibossIntroStage = 7;
+  state.minibossIntroFor = 3;
+  const startX = state.player.x;
+  stepGame(state, { ...idleInput, movement: { x: 1, y: 0 } }, 1 / 60);
+  assertGreater(state.player.x, startX);
+  state.player.dashCooldown = 0;
+  stepGame(state, { ...idleInput, movement: { x: 1, y: 0 }, dash: true }, 1 / 60);
+  assertGreater(state.player.dashFor, 0);
+  assertEquals(state.minibossIntroStage, 7);
+  for (let i = 0; i < 200; i++) stepGame(state, idleInput, 1 / 60);
+  assertEquals(state.minibossFightStarts, 1);
+});
+
+Deno.test("NEVER holds for its full beat before automatically launching the teaching wall", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  state.minibossIntroStage = 4;
+  state.minibossIntroFor = 0;
+  stepGame(state, idleInput, 1 / 60);
+  assertEquals(state.bossDialogue?.text, "NEVER!");
+  for (let i = 0; i < 120; i++) stepGame(state, { ...idleInput, secondary: i % 2 === 0 }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 5);
+  assertEquals(state.projectiles.length, 0);
+  for (let i = 0; i < 30; i++) stepGame(state, idleInput, 1 / 60);
+  assertEquals(state.minibossIntroStage, 6);
+  assert(state.projectiles.some((shot) => shot.pattern === "backfill-wall"));
+});
+
+Deno.test("Backfill keeps moving through the wall warning and covering fire", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  state.minibossIntroStage = 8;
+  state.player.invulnerableFor = 100;
+  const boss = state.enemies[0];
+  boss.x = 140;
+  boss.y = 80;
+  state.backfillWallCooldown = 0;
+  const initial = { x: boss.x, y: boss.y };
+  stepGame(state, idleInput, 1 / 60);
+  assertGreater(Math.hypot(boss.x - initial.x, boss.y - initial.y), 0);
+  state.backfillWallWarningFor = 0.001;
+  stepGame(state, idleInput, 1 / 60);
+  const wall = state.projectiles.find((shot) => shot.pattern === "backfill-wall")!;
+  assertEquals(Math.hypot(wall.vx, wall.vy), 260);
+  const duringWall = { x: boss.x, y: boss.y };
+  for (let i = 0; i < 65; i++) stepGame(state, idleInput, 1 / 60);
+  assertGreater(Math.hypot(boss.x - duringWall.x, boss.y - duringWall.y), 10);
+  assertGreater(state.projectiles.filter((shot) => !shot.friendly && !shot.pattern).length, 1);
+});
+
+Deno.test("Backfill attacks recover sooner while retaining a readable warning", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  state.minibossIntroStage = 8;
+  const boss = state.enemies[0];
+  boss.bossAttackStep = 1;
+  boss.behaviorCooldown = 0;
+  stepGame(state, idleInput, 1 / 60);
+  assertGreater(boss.warningFor, 0.6);
+  boss.behaviorCooldown = 0;
+  stepGame(state, idleInput, 1 / 60);
+  assert(boss.behaviorCooldown <= 0.55);
+  assertEquals(boss.maxHealth, 175);
+});
+
+Deno.test("Space advances a ready miniboss line even while primary fire is held", () => {
+  const state = activeState();
+  beginMiniboss(state);
+  for (let i = 0; i < 300; i++) stepGame(state, { ...idleInput, firing: true }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 1);
+  stepGame(state, { ...idleInput, firing: true, secondary: true }, 1 / 60);
+  assertEquals(state.minibossIntroStage, 2);
 });

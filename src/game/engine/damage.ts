@@ -1,4 +1,4 @@
-import type { GameState } from "../types.ts";
+import type { Enemy, GameState } from "../types.ts";
 import { burstParticles } from "./combat.ts";
 import { clearRetainedPowerups } from "./powerups.ts";
 
@@ -27,4 +27,21 @@ export function damagePlayer(state: GameState, amount: number, reason: string) {
     state.gameOverReason = reason;
     state.banner = "Library overrun";
   }
+}
+
+// Preserve one signature wall without scaling health to the player's loadout.
+export function damageEnemy(state: GameState, enemy: Enemy, amount: number) {
+  if (enemy.bossKind === "backfill-daemon" && state.phase === "miniboss") {
+    if (state.minibossIntroStage < 8 || state.backfillShielded) return;
+    const threshold = enemy.maxHealth * 0.66;
+    if (
+      !state.backfillWallCompleted && enemy.health > threshold && enemy.health - amount <= threshold
+    ) {
+      enemy.health = threshold;
+      state.backfillShielded = true;
+      state.backfillWallCooldown = 0;
+      return;
+    }
+  }
+  enemy.health -= amount;
 }

@@ -53,9 +53,10 @@ export function updateBacklogEncounter(
   }
 
   if (state.backlogIntroStage < BACKLOG_INTRO_ACTIVE_STAGE) {
-    const advancePressed = input.firing || input.secondary;
-    const advance = advancePressed && !state.backlogDialogueAdvanceHeld;
-    state.backlogDialogueAdvanceHeld = advancePressed;
+    const advance = (input.firing && !state.backlogDialogueAdvanceHeld) ||
+      (input.secondary && !state.backlogDialogueSecondaryHeld);
+    state.backlogDialogueAdvanceHeld = input.firing;
+    state.backlogDialogueSecondaryHeld = input.secondary;
     if (!advance) return;
     if (state.backlogIntroStage < 4) {
       state.backlogIntroStage += 1;

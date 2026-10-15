@@ -178,6 +178,7 @@ export class ArcadeInputController {
   };
 
   private readonly onPointerDown = (event: PointerEvent) => {
+    this.canvas.focus({ preventScroll: true });
     const point = canvasPoint(this.canvas, event);
     this.options.onInteract();
     this.canvas.setPointerCapture(event.pointerId);

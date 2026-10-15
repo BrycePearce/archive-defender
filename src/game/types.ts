@@ -411,6 +411,14 @@ export interface GameState {
   patternKind: "aimed" | "radial" | null;
   bossDialogue: BossDialogue | null;
   minibossDefeatFor: number;
+  backfillDialogueAdvanceHeld: boolean;
+  backfillDialogueSecondaryHeld: boolean;
+  backfillWallActive: boolean;
+  backfillWallResolved: boolean;
+  backfillFollowupAttack: number | null;
+  backfillFollowupFor: number;
+  backfillWallCompleted: boolean;
+  backfillShielded: boolean;
   minibossIntroStage: number;
   minibossIntroFor: number;
   minibossFightStarts: number;
@@ -428,6 +436,7 @@ export interface GameState {
   backlogIntroStage: number;
   backlogIntroFor: number;
   backlogDialogueAdvanceHeld: boolean;
+  backlogDialogueSecondaryHeld: boolean;
   backlogHits: number;
   backlogIntermissionStage: number;
   backlogIntermissionFor: number;

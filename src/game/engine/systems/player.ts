@@ -1,3 +1,4 @@
+import { damageEnemy } from "../damage.ts";
 import { ACTS } from "../../content.ts";
 import type {
   ArcadeInput,
@@ -312,7 +313,7 @@ function fireDeepScan(
         if (enemy.bossKind === "backlog" && state.phase === "boss") {
           continue;
         }
-        enemy.health -= 4;
+        damageEnemy(state, enemy, 4);
         if (enemy.bossKind === "backlog") {
           enemy.x = clamp(
             enemy.x + direction.x * DEEP_SCAN_BACKLOG_KNOCKBACK,

@@ -120,6 +120,7 @@ export function beginBoss(state: GameState) {
     state.backlogIntroStage = 1;
     state.backlogIntroFor = 0;
     state.backlogDialogueAdvanceHeld = false;
+    state.backlogDialogueSecondaryHeld = false;
     state.backlogHits = 0;
     state.backlogFightStarts = 0;
     state.backlogBombs = [];
@@ -150,17 +151,25 @@ export function beginMiniboss(state: GameState) {
   state.banner = miniboss.name;
   state.minibossDefeatFor = 0;
   state.minibossIntroStage = 1;
-  state.minibossIntroFor = 4.6;
-  state.backfillWallCooldown = 0;
+  state.minibossIntroFor = 0;
+  state.backfillDialogueAdvanceHeld = true;
+  state.backfillDialogueSecondaryHeld = false;
+  state.backfillWallActive = false;
+  state.backfillWallResolved = false;
+  state.backfillFollowupAttack = null;
+  state.backfillFollowupFor = 0;
+  state.backfillWallCompleted = false;
+  state.backfillShielded = false;
   state.backfillWallWarningFor = 0;
   resetDropDirector(state);
   preparePlayerForPhase(state);
   clearArena(state);
+  state.backfillWallCooldown = 999;
   const enemy = createMiniboss(state);
   enemy.y = 34;
   state.objectiveTarget = enemy.maxHealth;
   state.enemies.push(enemy);
-  showBossDialogue(state, miniboss.quotes.intro, enemy.x, enemy.y, 4.6, "normal", 17);
+  showBossDialogue(state, miniboss.quotes.intro, enemy.x, enemy.y, 3600, "normal", 17);
 }
 
 export function preparePlayerForPhase(state: GameState) {
@@ -207,6 +216,7 @@ export function clearArena(
   state.backlogIntroStage = 0;
   state.backlogIntroFor = 0;
   state.backlogDialogueAdvanceHeld = false;
+  state.backlogDialogueSecondaryHeld = false;
   state.backlogHits = 0;
   state.backlogIntermissionStage = 0;
   state.backlogIntermissionFor = 0;

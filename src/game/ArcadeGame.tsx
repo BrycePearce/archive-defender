@@ -265,6 +265,7 @@ export function ArcadeGame({
       <div className={`arcade-cabinet arcade-act-${summary.actIndex + 1}`}>
         <canvas
           ref={canvasRef}
+          tabIndex={-1}
           className="arcade-canvas"
           aria-label="Archive Defender game area"
         />

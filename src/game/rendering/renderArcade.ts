@@ -1,3 +1,4 @@
+import { drawWallSegment } from "./walls.ts";
 import { ACTS, UPGRADE_BY_ID } from "../content.ts";
 import { getCurrentEncounter } from "../engine.ts";
 import type { TouchVisuals } from "../input.ts";
@@ -41,6 +42,34 @@ export function renderArcade(
   drawArena(context, state, width, height);
   drawStacksArena(context, state, options.settings.reducedEffects);
   drawBackfillWallWarning(context, state, width, height);
+  if (state.phase === "miniboss" && (state.minibossIntroStage === 6 || state.backfillShielded)) {
+    context.save();
+    context.fillStyle = "rgba(4, 14, 23, 0.94)";
+    context.fillRect(width / 2 - 155, height - 62, 310, 28);
+    context.font = "bold 12px ui-monospace, monospace";
+    context.textAlign = "center";
+    context.fillStyle = "#f8d477";
+    context.fillText(
+      state.minibossIntroStage === 6
+        ? "MOVE + TAB: DODGE THROUGH THE WALL"
+        : "SHIELDED � CROSS THE BACKFILL WALL",
+      width / 2,
+      height - 43,
+    );
+    context.restore();
+  }
+  if (state.backfillShielded && state.phase === "miniboss") {
+    const boss = state.enemies.find((enemy) => enemy.bossKind === "backfill-daemon");
+    if (boss) {
+      context.save();
+      context.strokeStyle = "#f8d477";
+      context.lineWidth = 3;
+      context.beginPath();
+      context.arc(boss.x, boss.y, boss.radius + 9, 0, Math.PI * 2);
+      context.stroke();
+      context.restore();
+    }
+  }
   drawBacklogFirewallWarning(context, state, width, height);
   drawBacklogRetaliationWarning(context, state, width, height, options.settings.reducedEffects);
   drawObjective(context, state, width, height);
@@ -209,34 +238,15 @@ function drawProjectile(
     if ((projectile.warningFor ?? 0) > 0) {
       context.globalAlpha = Math.floor((projectile.warningFor ?? 0) * 14) % 2 === 0 ? 0.28 : 1;
     }
-    context.translate(projectile.x, projectile.y);
-    context.rotate(Math.atan2(projectile.vy, projectile.vx));
     const backlog = projectile.pattern === "backlog-firewall";
-    context.fillStyle = backlog ? "#f3a65a" : "#ff334f";
-    context.strokeStyle = backlog ? "#ffe0a3" : "#ff9cab";
-    context.shadowColor = backlog ? "#f3a65a" : "#ff334f";
-    context.shadowBlur = 12;
-    context.lineWidth = 2;
-    context.fillRect(
-      -projectile.radius,
-      -projectile.radius,
-      projectile.radius * 2,
-      projectile.radius * 2,
-    );
-    context.strokeRect(
-      -projectile.radius,
-      -projectile.radius,
-      projectile.radius * 2,
-      projectile.radius * 2,
-    );
-    context.fillStyle = "#290710";
-    context.font = "900 8px ui-monospace, monospace";
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(
+    drawWallSegment(
+      context,
+      projectile.x,
+      projectile.y,
+      Math.atan2(projectile.vy, projectile.vx),
+      projectile.radius,
       backlog ? "▶" : projectile.pattern === "backlog-firewall-red" ? "TAB" : "1",
-      0,
-      0,
+      backlog,
     );
     context.restore();
     return;
@@ -375,6 +385,8 @@ function drawBossDialogue(
   const interactiveBacklog = state.phase === "boss" &&
     ACTS[state.actIndex]?.boss.kind === "backlog" &&
     state.backlogIntroStage < 5;
+  const interactiveDialogue = interactiveBacklog ||
+    (state.phase === "miniboss" && state.minibossIntroStage === 1);
   const danger = dialogue.tone === "danger";
   const lineHeight = danger ? 22 : 16;
   context.font = danger ? "900 17px ui-monospace, monospace" : "700 11px ui-monospace, monospace";
@@ -389,7 +401,7 @@ function drawBossDialogue(
     Math.max(170, ...lines.map((line) => context.measureText(line).width + 28)),
   );
   const textHeight = 24 + lines.length * lineHeight;
-  const bubbleHeight = textHeight + (interactiveBacklog ? 19 : 0);
+  const bubbleHeight = textHeight + (interactiveDialogue ? 19 : 0);
   const x = clampRender(dialogue.x, bubbleWidth / 2 + 12, width - bubbleWidth / 2 - 12);
   const preferAbove = dialogue.y - bubbleHeight - 46 >= 12;
   const y = clampRender(
@@ -399,7 +411,11 @@ function drawBossDialogue(
   );
   const fade = Math.min(1, dialogue.life / 0.3, (dialogue.maxLife - dialogue.life) / 0.18);
 
-  context.globalAlpha = Math.max(0, fade);
+  // One deliberate out-and-in blink on each of the three estimation beats.
+  const estimating = state.phase === "miniboss" && state.minibossIntroStage >= 2 &&
+    state.minibossIntroStage <= 4;
+  const blink = estimating ? Math.min(1, Math.abs(elapsed - 0.7) / 0.2) : 1;
+  context.globalAlpha = Math.max(0, fade) * blink;
   context.fillStyle = "rgba(4, 14, 23, 0.94)";
   context.strokeStyle = danger ? "#ff334f" : "#70dff2";
   context.shadowColor = danger ? "#ff334f" : "transparent";
@@ -422,7 +438,7 @@ function drawBossDialogue(
       : "#e7ffff";
     context.fillText(line, x, y + 12 + index * lineHeight);
   });
-  if (interactiveBacklog) {
+  if (interactiveDialogue) {
     const promptY = y + textHeight;
     context.strokeStyle = danger ? "rgba(255, 91, 116, 0.44)" : "rgba(112, 223, 242, 0.36)";
     context.lineWidth = 1;
@@ -433,7 +449,10 @@ function drawBossDialogue(
     context.fillStyle = "rgba(248, 212, 119, 0.88)";
     context.font = "900 8px ui-monospace, monospace";
     context.textBaseline = "top";
-    context.fillText("CLICK / SPACE TO CONTINUE", x, promptY + 5);
+    const speaking = state.phase === "miniboss" &&
+      (elapsed < 0.6 ||
+        (dialogue.revealRate && elapsed * dialogue.revealRate < dialogue.text.length));
+    context.fillText(speaking ? "TRANSMITTING..." : "CLICK / SPACE TO CONTINUE", x, promptY + 5);
   }
   context.restore();
 }

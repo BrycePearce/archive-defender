@@ -31,10 +31,14 @@ import {
   MAX_HAZARDS,
   PLAYER_RADIUS,
 } from "./engine/config.ts";
-import { damagePlayer } from "./engine/damage.ts";
+import { damageEnemy, damagePlayer } from "./engine/damage.ts";
 import { clamp, segmentHitsCircle } from "./engine/geometry.ts";
 
-import { updateBackfillDaemon, updateBackfillEncounter } from "./engine/encounters/backfill.ts";
+import {
+  resolveBackfillWall,
+  updateBackfillDaemon,
+  updateBackfillEncounter,
+} from "./engine/encounters/backfill.ts";
 import { createStacksEncounterState, updateStacksEncounter } from "./engine/encounters/stacks.ts";
 import { isBacklogFirewallPattern } from "./engine/projectilePatterns.ts";
 import {
@@ -190,6 +194,14 @@ export function createGameState(
     patternKind: null,
     bossDialogue: null,
     minibossDefeatFor: 0,
+    backfillDialogueAdvanceHeld: false,
+    backfillDialogueSecondaryHeld: false,
+    backfillWallActive: false,
+    backfillWallResolved: false,
+    backfillFollowupAttack: null,
+    backfillFollowupFor: 0,
+    backfillWallCompleted: false,
+    backfillShielded: false,
     minibossIntroStage: 0,
     minibossIntroFor: 0,
     minibossFightStarts: 0,
@@ -207,6 +219,7 @@ export function createGameState(
     backlogIntroStage: 0,
     backlogIntroFor: 0,
     backlogDialogueAdvanceHeld: false,
+    backlogDialogueSecondaryHeld: false,
     backlogHits: 0,
     backlogIntermissionStage: 0,
     backlogIntermissionFor: 0,
@@ -368,7 +381,17 @@ export function stepGame(
   const stagingBacklog = state.phase === "boss" &&
     ACTS[state.actIndex].boss.kind === "backlog" &&
     state.backlogIntroStage < BACKLOG_INTRO_ACTIVE_STAGE;
-  const playerInput = stagingBacklog
+  const stagingBackfill = state.phase === "miniboss" && state.minibossIntroStage < 8;
+  const playerInput = stagingBackfill
+    ? {
+      ...input,
+      firing: false,
+      secondary: false,
+      reload: false,
+      movement: state.minibossIntroStage >= 6 ? input.movement : { x: 0, y: 0 },
+      dash: state.minibossIntroStage >= 6 && input.dash,
+    }
+    : stagingBacklog
     ? {
       ...input,
       movement: { x: 0, y: 0 },
@@ -410,10 +433,11 @@ export function stepGame(
     enemy.previousX = enemy.x;
     enemy.previousY = enemy.y;
   }
-  updateBackfillEncounter(state, dt, random);
+  updateBackfillEncounter(state, dt, input, random);
   updateBacklogEncounter(state, dt, input, random);
   updateSpawns(state, dt, random);
-  const frozen = state.activePowerups.freezeFor > 0;
+  const frozen = state.activePowerups.freezeFor > 0 &&
+    !(state.phase === "miniboss" && state.minibossIntroStage < 8);
   if (!frozen) updatePatternDirector(state, dt);
   updateProjectiles(state, dt, frozen);
   if (!frozen) updateEnemies(state, dt, random);
@@ -458,7 +482,7 @@ function updateTimers(state: GameState, dt: number) {
     0,
     state.player.secondaryCooldown - dt,
   );
-  if (state.phase !== "reward") {
+  if (state.phase !== "reward" && !(state.phase === "miniboss" && state.minibossIntroStage < 8)) {
     state.activePowerups.reflect = Math.max(0, state.activePowerups.reflect - dt);
     state.activePowerups.prism = Math.max(0, state.activePowerups.prism - dt);
     state.activePowerups.freezeFor = Math.max(0, state.activePowerups.freezeFor - dt);
@@ -624,7 +648,7 @@ function updateSingularity(state: GameState, dt: number, random: () => number) {
     const pull = 310 * resistance * Math.min(1, 190 / distance);
     enemy.x += (dx / distance) * pull * dt;
     enemy.y += (dy / distance) * pull * dt;
-    enemy.health -= (enemy.kind === "boss" ? 0.6 : 1.8) * dt;
+    damageEnemy(state, enemy, (enemy.kind === "boss" ? 0.6 : 1.8) * dt);
     if (enemy.health <= 0) destroyEnemy(state, enemy, random);
   }
 
@@ -658,7 +682,7 @@ function updateSingularity(state: GameState, dt: number, random: () => number) {
     ) {
       continue;
     }
-    enemy.health -= enemy.kind === "boss" ? 3 : 7;
+    damageEnemy(state, enemy, enemy.kind === "boss" ? 3 : 7);
     if (enemy.health <= 0) destroyEnemy(state, enemy, random);
   }
   for (const projectile of state.projectiles) {
@@ -719,12 +743,15 @@ function updateBoss(
     enemy.warningFor = 0.8;
     enemy.bossAttackStep = 0;
     enemy.bossAttackPending = undefined;
-    radialBurst(state, enemy, 6 + enemy.phase * 2, 160 + enemy.phase * 22);
+    if (enemy.bossKind !== "backfill-daemon") {
+      radialBurst(state, enemy, 6 + enemy.phase * 2, 160 + enemy.phase * 22);
+    }
     if (enemy.bossKind === "backfill-daemon") {
-      state.backfillWallCooldown = enemy.phase === 2 ? 4.5 : 3;
       const quotes = ACTS[state.actIndex].miniboss?.quotes;
       const quote = enemy.phase === 2 ? quotes?.phaseTwo : quotes?.phaseThree;
-      if (quote) showBossDialogue(state, quote, enemy.x, enemy.y, 3.4);
+      if (quote && state.backfillWallWarningFor === 0) {
+        showBossDialogue(state, quote, enemy.x, enemy.y, 3.4);
+      }
     }
   }
 
@@ -824,7 +851,7 @@ function resolveProjectileCollisions(state: GameState, random: () => number) {
       const damage = state.activePowerups.freezeFor > 0
         ? projectile.damage * FROZEN_DAMAGE_MULTIPLIER
         : projectile.damage;
-      enemy.health -= damage;
+      damageEnemy(state, enemy, damage);
       state.enemyHits += 1;
       burstParticles(
         state,
@@ -856,11 +883,23 @@ function resolveProjectileCollisions(state: GameState, random: () => number) {
   );
   if (hostile) {
     hostile.life = -1;
-    damagePlayer(state, 1, "Hostile traffic breached the archive.");
+    const lesson = state.phase === "miniboss" && state.minibossIntroStage === 6;
+    damagePlayer(
+      state,
+      lesson ? Math.min(1, state.player.health - 1) : 1,
+      "Hostile traffic breached the archive.",
+    );
+    if (
+      state.phase === "miniboss" && hostile.pattern === "backfill-wall" &&
+      state.backfillWallActive && !state.backfillWallResolved
+    ) {
+      resolveBackfillWall(state);
+    }
   }
 }
 
 function resolvePlayerCollisions(state: GameState) {
+  if (state.phase === "miniboss" && state.minibossIntroStage < 8) return;
   if (state.player.invulnerableFor > 0) return;
   const enemy = state.enemies.find(
     (candidate) =>

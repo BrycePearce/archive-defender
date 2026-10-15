@@ -1,3 +1,4 @@
+import { drawWallSegment } from "./walls.ts";
 import type { GameState } from "../types.ts";
 import { CAPTURE_PULSE_RADIUS, SWEEP_GAP_WIDTH } from "../engine/encounters/stacks.ts";
 import { getCurrentEncounter } from "../engine/selectors.ts";
@@ -73,14 +74,22 @@ export function drawStacksArena(
     const gapStart = Math.max(0, sweep.gap - SWEEP_GAP_WIDTH / 2);
     const gapEnd = Math.min(span, sweep.gap + SWEEP_GAP_WIDTH / 2);
     const warning = sweep.warningFor > 0;
-    context.fillStyle = warning ? "rgba(255,100,124,0.08)" : "rgba(255,100,124,0.55)";
-    context.fillRect(0, warning ? 0 : sweep.position - 10, gapStart, warning ? length : 20);
-    context.fillRect(
-      gapEnd,
-      warning ? 0 : sweep.position - 10,
-      span - gapEnd,
-      warning ? length : 20,
-    );
+    if (warning) {
+      context.fillStyle = "rgba(255,100,124,0.08)";
+      context.fillRect(0, 0, gapStart, length);
+      context.fillRect(gapEnd, 0, span - gapEnd, length);
+    } else {
+      // Share the same red segments as the boss walls, preserving the marked safe lane.
+      context.save();
+      context.beginPath();
+      context.rect(0, sweep.position - 10, gapStart, 20);
+      context.rect(gapEnd, sweep.position - 10, span - gapEnd, 20);
+      context.clip();
+      for (let offset = 0; offset <= span; offset += 15) {
+        drawWallSegment(context, offset, sweep.position, Math.PI / 2, 10, "1");
+      }
+      context.restore();
+    }
     context.fillStyle = "rgba(104,211,181,0.1)";
     if (warning) context.fillRect(gapStart, 0, gapEnd - gapStart, length);
     context.strokeStyle = warning ? "rgba(104,211,181,0.65)" : "#a8f2db";
